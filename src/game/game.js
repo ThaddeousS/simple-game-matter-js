@@ -2,16 +2,21 @@ import Matter from 'matter-js';
 import { Camera } from '../camera/camera.js';
 import { InputHandler } from '../input/input-handler.js';
 import { Player } from './entity/player/player.js';
+import { Entity } from './entity/entity.js';
 
 export class Game {
     constructor() {
         // Module aliases
-        const { Engine, Render, World, Bodies, Runner } = Matter;
+        const { Engine, Render, World, Bodies, Runner, Events } = Matter;
 
         // Load game config, player config, and level data
         this.gameConfig = this.getDefaultGameConfig();
         this.playerConfig = this.getDefaultPlayerConfig();
         this.levelData = this.getDefaultLevel();
+        
+        // Initialize debug states separately
+        this.debugLabels = this.gameConfig.debug || false;
+        this.wireframes = false;
         
         // Set aspect ratio from game config (default to 16:9 if not specified)
         try {
@@ -38,7 +43,7 @@ export class Game {
             options: {
                 width: dimensions.width,
                 height: dimensions.height,
-                wireframes: false,
+                wireframes: this.wireframes,
                 background: '#2c3e50'
             }
         });
@@ -72,8 +77,99 @@ export class Game {
         Runner.run(this.runner, this.engine);
         Render.run(this.render);
 
+        // Set up custom rendering for health displays
+        this.setupCustomRendering();
+
+        // Set up collision detection
+        this.setupCollisionDetection();
+
         // Game loop
         this.gameLoop();
+    }
+
+    setupCollisionDetection() {
+        const { Events } = Matter;
+        
+        Events.on(this.engine, 'collisionStart', (event) => {
+            const pairs = event.pairs;
+            
+            pairs.forEach((pair) => {
+                const { bodyA, bodyB } = pair;
+                
+                // Check if either body is a kill box
+                const isKillBoxA = bodyA.label && bodyA.label.startsWith('killbox_');
+                const isKillBoxB = bodyB.label && bodyB.label.startsWith('killbox_');
+                
+                if (isKillBoxA || isKillBoxB) {
+                    const entityBody = isKillBoxA ? bodyB : bodyA;
+                    
+                    // Find the entity that collided with kill box
+                    if (this.player && entityBody === this.player.body) {
+                        // Player hit kill box
+                        this.handlePlayerDeath();
+                    } else {
+                        // Other entity hit kill box
+                        const entity = this.entities.find(e => e.body === entityBody);
+                        if (entity) {
+                            entity.destroy();
+                            // Remove from entities array
+                            this.entities = this.entities.filter(e => e !== entity);
+                        }
+                    }
+                }
+            });
+        });
+    }
+
+    handlePlayerDeath() {
+        if (this.player && !this.player.isDestroyed) {
+            this.player.destroy();
+            this.showGameOver();
+        }
+    }
+
+    showGameOver() {
+        const dialog = document.getElementById('game-over-dialog');
+        dialog.style.display = 'block';
+    }
+
+    hideGameOver() {
+        const dialog = document.getElementById('game-over-dialog');
+        dialog.style.display = 'none';
+    }
+
+    setupCustomRendering() {
+        const canvas = this.render.canvas;
+        const context = this.render.context;
+
+        // Hook into Matter.js render events to draw health displays and debug labels
+        const { Events } = Matter;
+        Events.on(this.render, 'afterRender', () => {
+            // Check if info panel is visible
+            const infoPanel = document.getElementById('info');
+            const isPanelVisible = infoPanel && infoPanel.style.display !== 'none';
+            
+            // Render health for all entities
+            if (this.entities) {
+                this.entities.forEach(entity => {
+                    entity.renderHealth(context, this.camera);
+                    
+                    // Render debug labels only if debug labels mode is on AND panel is visible
+                    if (this.debugLabels && isPanelVisible) {
+                        entity.renderDebugLabel(context, this.camera);
+                    }
+                });
+            }
+            
+            // Render health and debug for player
+            if (this.player) {
+                this.player.renderHealth(context, this.camera);
+                
+                if (this.debugLabels && isPanelVisible) {
+                    this.player.renderDebugLabel(context, this.camera);
+                }
+            }
+        });
     }
 
     calculateCanvasDimensions() {
@@ -139,7 +235,8 @@ export class Game {
 
     getDefaultGameConfig() {
         return {
-            "aspectRatio": "16:9"
+            "aspectRatio": "16:9",
+            "debug": false
         };
     }
 
@@ -157,7 +254,10 @@ export class Game {
             "maxSpeed": 8,
             "friction": 0.3,
             "frictionAir": 0.01,
-            "density": 0.002
+            "density": 0.002,
+            "health": 100,
+            "maxHealth": 100,
+            "healthDisplay": "bar"
         };
     }
 
@@ -174,51 +274,22 @@ export class Game {
                     "y": -400
                 }
             },
-            "platforms": [
-                { "x": -400, "y": 100, "width": 300, "height": 20, "color": "#e74c3c", "isStatic": true },
-                { "x": 400, "y": -100, "width": 300, "height": 20, "color": "#3498db", "isStatic": true },
-                { "x": 0, "y": 300, "width": 400, "height": 20, "color": "#2ecc71", "isStatic": true },
-                { "x": -600, "y": -200, "width": 200, "height": 20, "color": "#f39c12", "isStatic": true },
-                { "x": 600, "y": 200, "width": 200, "height": 20, "color": "#9b59b6", "isStatic": true }
-            ],
-            "boxes": [
-                { "x": -200, "y": -300, "size": 50, "color": "#e74c3c" },
-                { "x": 300, "y": -200, "size": 40, "color": "#3498db" },
-                { "x": -500, "y": 50, "size": 60, "color": "#2ecc71" },
-                { "x": 100, "y": 150, "size": 45, "color": "#f39c12" },
-                { "x": 450, "y": -50, "size": 55, "color": "#9b59b6" },
-                { "x": -350, "y": -100, "size": 35, "color": "#1abc9c" },
-                { "x": 200, "y": 250, "size": 50, "color": "#e74c3c" },
-                { "x": -100, "y": -150, "size": 40, "color": "#3498db" },
-                { "x": 500, "y": 100, "size": 45, "color": "#2ecc71" },
-                { "x": -450, "y": 200, "size": 60, "color": "#f39c12" },
-                { "x": 150, "y": -250, "size": 50, "color": "#9b59b6" },
-                { "x": -250, "y": 150, "size": 55, "color": "#1abc9c" },
-                { "x": 350, "y": 50, "size": 40, "color": "#e74c3c" },
-                { "x": -150, "y": -50, "size": 45, "color": "#3498db" },
-                { "x": 550, "y": -150, "size": 50, "color": "#2ecc71" },
-                { "x": -550, "y": -50, "size": 35, "color": "#f39c12" },
-                { "x": 50, "y": 350, "size": 60, "color": "#9b59b6" },
-                { "x": -400, "y": -250, "size": 45, "color": "#1abc9c" },
-                { "x": 400, "y": 300, "size": 50, "color": "#e74c3c" },
-                { "x": -300, "y": 250, "size": 40, "color": "#3498db" }
-            ],
-            "circles": [
-                { "x": -100, "y": -200, "radius": 30, "color": "#e74c3c" },
-                { "x": 250, "y": -100, "radius": 25, "color": "#3498db" },
-                { "x": -400, "y": 100, "radius": 35, "color": "#2ecc71" },
-                { "x": 150, "y": 200, "radius": 28, "color": "#f39c12" },
-                { "x": 500, "y": -50, "radius": 40, "color": "#9b59b6" },
-                { "x": -300, "y": -150, "radius": 22, "color": "#1abc9c" },
-                { "x": 300, "y": 150, "radius": 33, "color": "#e74c3c" },
-                { "x": -200, "y": 250, "radius": 27, "color": "#3498db" },
-                { "x": 450, "y": 50, "radius": 30, "color": "#2ecc71" },
-                { "x": -500, "y": -100, "radius": 35, "color": "#f39c12" },
-                { "x": 100, "y": -300, "radius": 25, "color": "#9b59b6" },
-                { "x": -350, "y": 300, "radius": 38, "color": "#1abc9c" },
-                { "x": 350, "y": -200, "radius": 29, "color": "#e74c3c" },
-                { "x": -150, "y": 50, "radius": 32, "color": "#3498db" },
-                { "x": 550, "y": 150, "radius": 26, "color": "#2ecc71" }
+            "entities": [
+                { "x": -400, "y": 100, "width": 300, "height": 20, "color": "#e74c3c", "isStatic": true, "label": "platform_1" },
+                { "x": 400, "y": -100, "width": 300, "height": 20, "color": "#3498db", "isStatic": true, "label": "platform_2" },
+                { "x": 0, "y": 300, "width": 400, "height": 20, "color": "#2ecc71", "isStatic": true, "label": "platform_3" },
+                { "x": -600, "y": -200, "width": 200, "height": 20, "color": "#f39c12", "isStatic": true, "label": "platform_4" },
+                { "x": 600, "y": 200, "width": 200, "height": 20, "color": "#9b59b6", "isStatic": true, "label": "platform_5" },
+                { "x": -200, "y": -300, "width": 50, "height": 50, "color": "#e74c3c", "label": "box_1" },
+                { "x": 300, "y": -200, "width": 40, "height": 40, "color": "#3498db", "label": "box_2" },
+                { "x": -500, "y": 50, "width": 60, "height": 60, "color": "#2ecc71", "label": "box_3" },
+                { "x": 100, "y": 150, "width": 45, "height": 45, "color": "#f39c12", "label": "box_4" },
+                { "x": 450, "y": -50, "width": 55, "height": 55, "color": "#9b59b6", "label": "box_5" },
+                { "x": -100, "y": -200, "shape": "circle", "radius": 30, "color": "#e74c3c", "label": "circle_1" },
+                { "x": 250, "y": -100, "shape": "circle", "radius": 25, "color": "#3498db", "label": "circle_2" },
+                { "x": -400, "y": 100, "shape": "circle", "radius": 35, "color": "#2ecc71", "label": "circle_3" },
+                { "x": 150, "y": 200, "shape": "circle", "radius": 28, "color": "#f39c12", "label": "circle_4" },
+                { "x": 500, "y": -50, "shape": "circle", "radius": 40, "color": "#9b59b6", "label": "circle_5" }
             ]
         };
     }
@@ -230,7 +301,6 @@ export class Game {
                 const levelData = JSON.parse(e.target.result);
                 this.levelData = levelData;
                 this.resetWorld();
-                console.log('Level loaded successfully!');
             } catch (error) {
                 console.error('Error parsing level file:', error);
                 alert('Invalid level file format. Please check the JSON structure.');
@@ -265,7 +335,11 @@ export class Game {
                     }
                 }
                 
-                console.log('Game config loaded successfully!');
+                // Update debug labels if specified
+                if (gameConfig.debug !== undefined) {
+                    this.debugLabels = gameConfig.debug;
+                    this.updateDebugStatus();
+                }
             } catch (error) {
                 console.error('Error parsing game config file:', error);
                 alert('Invalid game config file format. Please check the JSON structure.');
@@ -281,9 +355,7 @@ export class Game {
                 const playerConfig = JSON.parse(e.target.result);
                 this.playerConfig = playerConfig;
                 this.resetWorld();
-                console.log('Player config loaded successfully!');
             } catch (error) {
-                console.error('Error parsing player config file:', error);
                 alert('Invalid player config file format. Please check the JSON structure.');
             }
         };
@@ -300,90 +372,60 @@ export class Game {
         const level = this.levelData;
 
         const bodies = [];
+        this.entities = []; // Store entity instances
+        this.killBoxes = []; // Store kill box references
 
         // Create boundaries if enabled
         if (level.boundaries && level.boundaries.enabled) {
             const worldSize = level.worldSize || 3000;
             const wallThickness = level.wallThickness || 50;
 
-            // Ground
-            bodies.push(Bodies.rectangle(0, worldSize / 2, worldSize, wallThickness, {
+            // Ground (kill box)
+            const ground = Bodies.rectangle(0, worldSize / 2, worldSize, wallThickness, {
                 isStatic: true,
                 render: { fillStyle: '#34495e' },
-                label: 'ground'
-            }));
+                label: 'killbox_ground'
+            });
+            bodies.push(ground);
+            this.killBoxes.push(ground);
 
-            // Ceiling
-            bodies.push(Bodies.rectangle(0, -worldSize / 2, worldSize, wallThickness, {
+            // Ceiling (kill box)
+            const ceiling = Bodies.rectangle(0, -worldSize / 2, worldSize, wallThickness, {
                 isStatic: true,
                 render: { fillStyle: '#34495e' },
-                label: 'ceiling'
-            }));
+                label: 'killbox_ceiling'
+            });
+            bodies.push(ceiling);
+            this.killBoxes.push(ceiling);
 
-            // Left wall
-            bodies.push(Bodies.rectangle(-worldSize / 2, 0, wallThickness, worldSize, {
+            // Left wall (kill box)
+            const leftWall = Bodies.rectangle(-worldSize / 2, 0, wallThickness, worldSize, {
                 isStatic: true,
                 render: { fillStyle: '#34495e' },
-                label: 'leftWall'
-            }));
+                label: 'killbox_left'
+            });
+            bodies.push(leftWall);
+            this.killBoxes.push(leftWall);
 
-            // Right wall
-            bodies.push(Bodies.rectangle(worldSize / 2, 0, wallThickness, worldSize, {
+            // Right wall (kill box)
+            const rightWall = Bodies.rectangle(worldSize / 2, 0, wallThickness, worldSize, {
                 isStatic: true,
                 render: { fillStyle: '#34495e' },
-                label: 'rightWall'
-            }));
+                label: 'killbox_right'
+            });
+            bodies.push(rightWall);
+            this.killBoxes.push(rightWall);
         }
 
-        // Create platforms
-        if (level.platforms) {
-            level.platforms.forEach((platform, index) => {
-                bodies.push(Bodies.rectangle(
-                    platform.x,
-                    platform.y,
-                    platform.width,
-                    platform.height,
-                    {
-                        isStatic: platform.isStatic !== false,
-                        render: { fillStyle: platform.color || '#e74c3c' },
-                        label: `platform_${index}`
-                    }
-                ));
+        // Create entities from the entities array
+        if (level.entities) {
+            level.entities.forEach((entityConfig) => {
+                const entity = new Entity(entityConfig, this.world);
+                this.entities.push(entity);
             });
         }
 
-        // Create boxes
-        if (level.boxes) {
-            level.boxes.forEach((box, index) => {
-                bodies.push(Bodies.rectangle(
-                    box.x,
-                    box.y,
-                    box.size,
-                    box.size,
-                    {
-                        render: { fillStyle: box.color || '#3498db' },
-                        label: `box_${index}`
-                    }
-                ));
-            });
-        }
-
-        // Create circles
-        if (level.circles) {
-            level.circles.forEach((circle, index) => {
-                bodies.push(Bodies.circle(
-                    circle.x,
-                    circle.y,
-                    circle.radius,
-                    {
-                        render: { fillStyle: circle.color || '#2ecc71' },
-                        label: `circle_${index}`
-                    }
-                ));
-            });
-        }
-
-        // Add all bodies to the world
+        // Add boundary bodies to the world (entities are already added in their constructor)
         World.add(this.world, bodies);
     }
 
@@ -413,16 +455,63 @@ export class Game {
             this.render.options.height = dimensions.height;
         });
 
-        // Handle R to reset, L to load level, G to load game config, P to load player config
+        // Handle keyboard shortcuts
         window.addEventListener('keydown', (e) => {
+            // Ctrl+D can always be used to toggle the panel
+            if ((e.key === 'd' || e.key === 'D') && e.ctrlKey) {
+                e.preventDefault(); // Prevent browser bookmark dialog
+                const infoPanel = document.getElementById('info');
+                if (infoPanel.style.display === 'none') {
+                    // Showing panel - restore debug settings
+                    infoPanel.style.display = 'block';
+                    this.render.options.wireframes = this.wireframes;
+                } else {
+                    // Hiding panel - disable visual debug features but preserve settings
+                    infoPanel.style.display = 'none';
+                    this.render.options.wireframes = false;
+                }
+                return;
+            }
+            
+            // Check if info panel is visible for all other shortcuts
+            const infoPanel = document.getElementById('info');
+            const isPanelVisible = infoPanel.style.display !== 'none';
+            
+            if (!isPanelVisible) {
+                // If panel is hidden, ignore all other shortcuts
+                return;
+            }
+            
+            // All other shortcuts only work when panel is visible
             if (e.key === 'r' || e.key === 'R') {
                 this.resetWorld();
-            } else if (e.key === 'l' || e.key === 'L') {
+            } else if ((e.key === 'l' || e.key === 'L') && !e.ctrlKey) {
                 document.getElementById('levelFileInput').click();
-            } else if (e.key === 'g' || e.key === 'G') {
+            } else if ((e.key === 'g' || e.key === 'G') && !e.ctrlKey) {
                 document.getElementById('gameConfigFileInput').click();
-            } else if (e.key === 'p' || e.key === 'P') {
+            } else if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey) {
                 document.getElementById('playerConfigFileInput').click();
+            } else if ((e.key === 'l' || e.key === 'L') && e.ctrlKey) {
+                // Toggle debug labels with Ctrl+L
+                e.preventDefault();
+                this.debugLabels = !this.debugLabels;
+                this.updateDebugStatus();
+            } else if ((e.key === 'y' || e.key === 'Y') && e.ctrlKey) {
+                // Toggle wireframes with Ctrl+Y
+                e.preventDefault();
+                this.wireframes = !this.wireframes;
+                this.render.options.wireframes = this.wireframes;
+                this.updateDebugStatus();
+            } else if (e.key === '1') {
+                // Test: Damage player
+                if (this.player && !this.player.isDestroyed) {
+                    this.player.takeDamage(10);
+                }
+            } else if (e.key === '2') {
+                // Test: Heal player
+                if (this.player && !this.player.isDestroyed) {
+                    this.player.heal(10);
+                }
             }
         });
 
@@ -460,6 +549,22 @@ export class Game {
         });
     }
 
+    toggleInfoPanel() {
+        const infoContent = document.getElementById('info-content');
+        const infoHeader = document.getElementById('info-header');
+        const isCollapsed = infoContent.style.display === 'none';
+        
+        infoContent.style.display = isCollapsed ? 'block' : 'none';
+        infoHeader.innerHTML = isCollapsed 
+            ? '<strong>▼ Controls & Info</strong>' 
+            : '<strong>▶ Controls & Info</strong>';
+    }
+
+    updateDebugStatus() {
+        document.getElementById('debug-status').textContent = 
+            `Debug Labels: ${this.debugLabels ? 'ON' : 'OFF'} | Wireframes: ${this.wireframes ? 'ON' : 'OFF'}`;
+    }
+
     resetWorld() {
         const { World } = Matter;
         World.clear(this.world);
@@ -469,6 +574,7 @@ export class Game {
         this.camera.setTarget(this.player.body);
         this.camera.x = 0;
         this.camera.y = 0;
+        this.hideGameOver();
     }
 
     updateCamera() {
@@ -495,10 +601,13 @@ export class Game {
         });
 
         // Update UI
-        if (this.player) {
+        if (this.player && !this.player.isDestroyed) {
             const playerPos = this.player.getPosition();
             document.getElementById('camera-pos').textContent = 
-                `Camera: (${Math.round(this.camera.x)}, ${Math.round(this.camera.y)}) | Player: (${Math.round(playerPos.x)}, ${Math.round(playerPos.y)})`;
+                `Camera: (${Math.round(this.camera.x)}, ${Math.round(this.camera.y)}) | Player: (${Math.round(playerPos.x)}, ${Math.round(playerPos.y)}) | Health: ${this.player.health}/${this.player.maxHealth}`;
+        } else if (this.player && this.player.isDestroyed) {
+            document.getElementById('camera-pos').textContent = 
+                `Player Destroyed! Press R to reset.`;
         }
     }
 
