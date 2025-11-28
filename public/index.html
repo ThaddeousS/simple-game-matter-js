@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            body {
+                margin: 0;
+                overflow: hidden;
+                background-color: #1a1a1a;
+                font-family: Arial, sans-serif;
+            }
+            canvas {
+                display: block;
+            }
+            #info {
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                color: white;
+                background: rgba(0, 0, 0, 0.7);
+                padding: 15px;
+                border-radius: 5px;
+                font-size: 14px;
+                z-index: 10;
+            }
+            #info div {
+                margin: 5px 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="info">
+            <div><strong>Controls:</strong></div>
+            <div>Arrow Keys or WASD - Move Camera</div>
+            <div>Space - Add Box at Center</div>
+            <div>R - Reset World</div>
+            <div>L - Load Custom Level (JSON)</div>
+            <div id="camera-pos">Camera: (0, 0)</div>
+        </div>
+        <input type="file" id="levelFileInput" accept=".json" style="display: none;">
+    </body>
+</html>
