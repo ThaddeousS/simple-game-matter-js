@@ -1,12 +1,31 @@
 import Matter from 'matter-js';
 import { Camera } from '../camera/camera.js';
 import { InputHandler } from '../input/input-handler.js';
-import { Player } from '../player/player.js';
+import { Player } from './entity/player/player.js';
 
 export class Game {
     constructor() {
         // Module aliases
-        const { Engine, Render, Runner } = Matter;
+        const { Engine, Render, World, Bodies, Runner } = Matter;
+
+        // Load game config, player config, and level data
+        this.gameConfig = this.getDefaultGameConfig();
+        this.playerConfig = this.getDefaultPlayerConfig();
+        this.levelData = this.getDefaultLevel();
+        
+        // Set aspect ratio from game config (default to 16:9 if not specified)
+        try {
+            this.aspectRatio = this.gameConfig.aspectRatio 
+                ? this.parseAspectRatio(this.gameConfig.aspectRatio)
+                : (16 / 9);
+        } catch (error) {
+            console.error('Aspect ratio error:', error.message);
+            alert(error.message + '\n\nDefaulting to 16:9');
+            this.aspectRatio = 16 / 9;
+        }
+        
+        // Calculate initial dimensions maintaining aspect ratio
+        const dimensions = this.calculateCanvasDimensions();
 
         // Create engine
         this.engine = Engine.create();
@@ -17,15 +36,15 @@ export class Game {
             element: document.body,
             engine: this.engine,
             options: {
-                width: window.innerWidth,
-                height: window.innerHeight,
+                width: dimensions.width,
+                height: dimensions.height,
                 wireframes: false,
                 background: '#2c3e50'
             }
         });
 
         // Initialize camera
-        this.camera = new Camera(0, 0, window.innerWidth, window.innerHeight);
+        this.camera = new Camera(0, 0, dimensions.width, dimensions.height);
 
         // Initialize input
         this.input = new InputHandler();
@@ -35,8 +54,7 @@ export class Game {
         this.input.bindAction('moveRight', ['ArrowRight', 'd', 'D']);
         this.input.bindAction('jump', ['ArrowUp', 'w', 'W', ' ']);
 
-        // Load default level data
-        this.levelData = this.getDefaultLevel();
+        // Create world with loaded level data
         this.createWorld();
 
         // Create player using Player class
@@ -58,6 +76,91 @@ export class Game {
         this.gameLoop();
     }
 
+    calculateCanvasDimensions() {
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const windowAspectRatio = windowWidth / windowHeight;
+
+        let width, height;
+
+        if (windowAspectRatio > this.aspectRatio) {
+            // Window is wider than target aspect ratio
+            // Fit to height
+            height = windowHeight;
+            width = height * this.aspectRatio;
+        } else {
+            // Window is taller than target aspect ratio
+            // Fit to width
+            width = windowWidth;
+            height = width / this.aspectRatio;
+        }
+
+        return { width, height };
+    }
+
+    parseAspectRatio(aspectRatioString) {
+        // Valid aspect ratios
+        const validRatios = {
+            "16:9": 16 / 9,
+            "4:3": 4 / 3,
+            "21:9": 21 / 9
+        };
+
+        if (typeof aspectRatioString === 'number') {
+            // If it's already a number, validate it matches one of our allowed ratios
+            const matchingRatio = Object.entries(validRatios).find(
+                ([key, value]) => Math.abs(value - aspectRatioString) < 0.0001
+            );
+            
+            if (!matchingRatio) {
+                throw new Error(
+                    `Invalid aspect ratio: ${aspectRatioString}. ` +
+                    `Only the following aspect ratios are supported: "16:9", "4:3", "21:9"`
+                );
+            }
+            return aspectRatioString;
+        }
+
+        if (typeof aspectRatioString === 'string') {
+            if (!validRatios.hasOwnProperty(aspectRatioString)) {
+                throw new Error(
+                    `Invalid aspect ratio: "${aspectRatioString}". ` +
+                    `Only the following aspect ratios are supported: "16:9", "4:3", "21:9"`
+                );
+            }
+            return validRatios[aspectRatioString];
+        }
+
+        throw new Error(
+            `Invalid aspect ratio format. ` +
+            `Only the following aspect ratios are supported: "16:9", "4:3", "21:9"`
+        );
+    }
+
+    getDefaultGameConfig() {
+        return {
+            "aspectRatio": "16:9"
+        };
+    }
+
+    getDefaultPlayerConfig() {
+        return {
+            "x": 0,
+            "y": -400,
+            "width": 40,
+            "height": 60,
+            "color": "#ffcc00",
+            "strokeColor": "#ff9900",
+            "strokeWidth": 3,
+            "moveForce": 0.001,
+            "jumpForce": 0.015,
+            "maxSpeed": 8,
+            "friction": 0.3,
+            "frictionAir": 0.01,
+            "density": 0.002
+        };
+    }
+
     getDefaultLevel() {
         return {
             "worldSize": 3000,
@@ -65,20 +168,11 @@ export class Game {
             "boundaries": {
                 "enabled": true
             },
-            "player": {
-                "x": 0,
-                "y": -400,
-                "width": 40,
-                "height": 60,
-                "color": "#ffcc00",
-                "strokeColor": "#ff9900",
-                "strokeWidth": 3,
-                "moveForce": 0.001,
-                "jumpForce": 0.015,
-                "maxSpeed": 8,
-                "friction": 0.3,
-                "frictionAir": 0.01,
-                "density": 0.002
+            "overrides": {
+                "player": {
+                    "x": 0,
+                    "y": -400
+                }
             },
             "platforms": [
                 { "x": -400, "y": 100, "width": 300, "height": 20, "color": "#e74c3c", "isStatic": true },
@@ -140,6 +234,57 @@ export class Game {
             } catch (error) {
                 console.error('Error parsing level file:', error);
                 alert('Invalid level file format. Please check the JSON structure.');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    loadGameConfigFromFile(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const gameConfig = JSON.parse(e.target.result);
+                this.gameConfig = gameConfig;
+                
+                // Update aspect ratio if specified in the config
+                if (gameConfig.aspectRatio) {
+                    try {
+                        this.aspectRatio = this.parseAspectRatio(gameConfig.aspectRatio);
+                        
+                        // Recalculate and update canvas dimensions
+                        const dimensions = this.calculateCanvasDimensions();
+                        this.render.canvas.width = dimensions.width;
+                        this.render.canvas.height = dimensions.height;
+                        this.camera.width = dimensions.width;
+                        this.camera.height = dimensions.height;
+                        this.render.options.width = dimensions.width;
+                        this.render.options.height = dimensions.height;
+                    } catch (aspectError) {
+                        console.error('Aspect ratio error:', aspectError.message);
+                        alert(aspectError.message + '\n\nKeeping current aspect ratio.');
+                    }
+                }
+                
+                console.log('Game config loaded successfully!');
+            } catch (error) {
+                console.error('Error parsing game config file:', error);
+                alert('Invalid game config file format. Please check the JSON structure.');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    loadPlayerConfigFromFile(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const playerConfig = JSON.parse(e.target.result);
+                this.playerConfig = playerConfig;
+                this.resetWorld();
+                console.log('Player config loaded successfully!');
+            } catch (error) {
+                console.error('Error parsing player config file:', error);
+                alert('Invalid player config file format. Please check the JSON structure.');
             }
         };
         reader.readAsText(file);
@@ -243,38 +388,72 @@ export class Game {
     }
 
     createPlayer() {
-        if (!this.levelData.player) {
-            console.error('No player configuration found in level data');
-            return;
+        // Start with base player config
+        let playerConfig = { ...this.playerConfig };
+        
+        // Apply level-specific overrides if they exist
+        if (this.levelData.overrides && this.levelData.overrides.player) {
+            playerConfig = { ...playerConfig, ...this.levelData.overrides.player };
         }
         
-        this.player = new Player(this.levelData.player, this.world);
+        this.player = new Player(playerConfig, this.world);
     }
 
     setupEvents() {
         // Handle window resize
         window.addEventListener('resize', () => {
-            this.render.canvas.width = window.innerWidth;
-            this.render.canvas.height = window.innerHeight;
-            this.camera.width = window.innerWidth;
-            this.camera.height = window.innerHeight;
+            const dimensions = this.calculateCanvasDimensions();
+            this.render.canvas.width = dimensions.width;
+            this.render.canvas.height = dimensions.height;
+            this.camera.width = dimensions.width;
+            this.camera.height = dimensions.height;
+            
+            // Update render options
+            this.render.options.width = dimensions.width;
+            this.render.options.height = dimensions.height;
         });
 
-        // Handle R to reset and L to load level
+        // Handle R to reset, L to load level, G to load game config, P to load player config
         window.addEventListener('keydown', (e) => {
             if (e.key === 'r' || e.key === 'R') {
                 this.resetWorld();
             } else if (e.key === 'l' || e.key === 'L') {
                 document.getElementById('levelFileInput').click();
+            } else if (e.key === 'g' || e.key === 'G') {
+                document.getElementById('gameConfigFileInput').click();
+            } else if (e.key === 'p' || e.key === 'P') {
+                document.getElementById('playerConfigFileInput').click();
             }
         });
 
         // Handle file input for loading custom levels
-        const fileInput = document.getElementById('levelFileInput');
-        fileInput.addEventListener('change', (e) => {
+        const levelFileInput = document.getElementById('levelFileInput');
+        levelFileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
                 this.loadLevelFromFile(file);
+            }
+            // Reset the input so the same file can be loaded again
+            e.target.value = '';
+        });
+
+        // Handle file input for loading game config
+        const gameConfigFileInput = document.getElementById('gameConfigFileInput');
+        gameConfigFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                this.loadGameConfigFromFile(file);
+            }
+            // Reset the input so the same file can be loaded again
+            e.target.value = '';
+        });
+
+        // Handle file input for loading player config
+        const playerConfigFileInput = document.getElementById('playerConfigFileInput');
+        playerConfigFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                this.loadPlayerConfigFromFile(file);
             }
             // Reset the input so the same file can be loaded again
             e.target.value = '';
