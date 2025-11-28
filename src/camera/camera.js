@@ -4,23 +4,23 @@ export class Camera {
         this.y = y;
         this.width = width;
         this.height = height;
-        this.speed = 5;
+        this.target = null;
+        this.smoothing = 0.1; // Smooth camera follow (0 = instant, 1 = no follow)
     }
 
-    moveLeft() {
-        this.x -= this.speed;
+    setTarget(target) {
+        this.target = target;
     }
 
-    moveRight() {
-        this.x += this.speed;
-    }
-
-    moveUp() {
-        this.y -= this.speed;
-    }
-
-    moveDown() {
-        this.y += this.speed;
+    update() {
+        if (this.target) {
+            // Smoothly move camera towards target
+            const targetX = this.target.position.x;
+            const targetY = this.target.position.y;
+            
+            this.x += (targetX - this.x) * this.smoothing;
+            this.y += (targetY - this.y) * this.smoothing;
+        }
     }
 
     worldToScreen(worldX, worldY) {

@@ -1,11 +1,12 @@
 import Matter from 'matter-js';
 import { Camera } from '../camera/camera.js';
 import { InputHandler } from '../input/input-handler.js';
+import { Player } from '../player/player.js';
 
 export class Game {
     constructor() {
         // Module aliases
-        const { Engine, Render, Runner } = Matter;
+        const { Engine, Render, World, Bodies, Body, Events, Runner } = Matter;
 
         // Create engine
         this.engine = Engine.create();
@@ -28,10 +29,22 @@ export class Game {
 
         // Initialize input
         this.input = new InputHandler();
+        
+        // Bind input actions
+        this.input.bindAction('moveLeft', ['ArrowLeft', 'a', 'A']);
+        this.input.bindAction('moveRight', ['ArrowRight', 'd', 'D']);
+        this.input.bindAction('jump', ['ArrowUp', 'w', 'W', ' ']);
 
         // Load default level data
         this.levelData = this.getDefaultLevel();
         this.createWorld();
+
+        // Create player using Player class
+        this.player = null;
+        this.createPlayer();
+
+        // Set camera to follow player
+        this.camera.setTarget(this.player.body);
 
         // Setup event listeners
         this.setupEvents();
@@ -51,6 +64,21 @@ export class Game {
             "wallThickness": 50,
             "boundaries": {
                 "enabled": true
+            },
+            "player": {
+                "x": 0,
+                "y": -400,
+                "width": 40,
+                "height": 60,
+                "color": "#ffcc00",
+                "strokeColor": "#ff9900",
+                "strokeWidth": 3,
+                "moveForce": 0.001,
+                "jumpForce": 0.015,
+                "maxSpeed": 8,
+                "friction": 0.3,
+                "frictionAir": 0.01,
+                "density": 0.002
             },
             "platforms": [
                 { "x": -400, "y": 100, "width": 300, "height": 20, "color": "#e74c3c", "isStatic": true },
@@ -214,6 +242,15 @@ export class Game {
         World.add(this.world, bodies);
     }
 
+    createPlayer() {
+        if (!this.levelData.player) {
+            console.error('No player configuration found in level data');
+            return;
+        }
+        
+        this.player = new Player(this.levelData.player, this.world);
+    }
+
     setupEvents() {
         // Handle window resize
         window.addEventListener('resize', () => {
@@ -223,12 +260,9 @@ export class Game {
             this.camera.height = window.innerHeight;
         });
 
-        // Handle spacebar to add objects and R to reset
+        // Handle R to reset and L to load level
         window.addEventListener('keydown', (e) => {
-            if (e.key === ' ') {
-                e.preventDefault();
-                this.addBoxAtCenter();
-            } else if (e.key === 'r' || e.key === 'R') {
+            if (e.key === 'r' || e.key === 'R') {
                 this.resetWorld();
             } else if (e.key === 'l' || e.key === 'L') {
                 document.getElementById('levelFileInput').click();
@@ -247,46 +281,25 @@ export class Game {
         });
     }
 
-    addBoxAtCenter() {
-        const { Bodies, World } = Matter;
-        const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
-        
-        const box = Bodies.rectangle(
-            this.camera.x,
-            this.camera.y,
-            50,
-            50,
-            {
-                render: { fillStyle: colors[Math.floor(Math.random() * colors.length)] }
-            }
-        );
-        
-        World.add(this.world, box);
-    }
-
     resetWorld() {
         const { World } = Matter;
         World.clear(this.world);
         this.engine.world = this.world;
         this.createWorld();
+        this.createPlayer();
+        this.camera.setTarget(this.player.body);
         this.camera.x = 0;
         this.camera.y = 0;
     }
 
     updateCamera() {
-        // Handle camera movement with arrow keys
-        if (this.input.isPressed('ArrowLeft') || this.input.isPressed('a') || this.input.isPressed('A')) {
-            this.camera.moveLeft();
+        // Update player based on input
+        if (this.player) {
+            this.player.update(this.input);
         }
-        if (this.input.isPressed('ArrowRight') || this.input.isPressed('d') || this.input.isPressed('D')) {
-            this.camera.moveRight();
-        }
-        if (this.input.isPressed('ArrowUp') || this.input.isPressed('w') || this.input.isPressed('W')) {
-            this.camera.moveUp();
-        }
-        if (this.input.isPressed('ArrowDown') || this.input.isPressed('s') || this.input.isPressed('S')) {
-            this.camera.moveDown();
-        }
+
+        // Update camera to follow player
+        this.camera.update();
 
         // Update the render bounds to follow the camera
         // Matter.js Render.lookAt expects bounds in this format
@@ -303,8 +316,11 @@ export class Game {
         });
 
         // Update UI
-        document.getElementById('camera-pos').textContent = 
-            `Camera: (${Math.round(this.camera.x)}, ${Math.round(this.camera.y)})`;
+        if (this.player) {
+            const playerPos = this.player.getPosition();
+            document.getElementById('camera-pos').textContent = 
+                `Camera: (${Math.round(this.camera.x)}, ${Math.round(this.camera.y)}) | Player: (${Math.round(playerPos.x)}, ${Math.round(playerPos.y)})`;
+        }
     }
 
     gameLoop() {

@@ -1,6 +1,7 @@
 export class InputHandler {
     constructor() {
         this.keys = {};
+        this.actions = {};
         this.setupEventListeners();
     }
 
@@ -16,5 +17,15 @@ export class InputHandler {
 
     isPressed(key) {
         return this.keys[key] === true;
+    }
+
+    bindAction(actionName, keys) {
+        this.actions[actionName] = keys;
+    }
+
+    isActionPressed(actionName) {
+        const keys = this.actions[actionName];
+        if (!keys) return false;
+        return keys.some(key => this.isPressed(key));
     }
 }
