@@ -46,10 +46,50 @@
             #reset-button:active {
                 transform: scale(0.95);
             }
+            .editor-btn {
+                padding: 8px 20px;
+                font-size: 14px;
+                background: #3498db;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+            }
+            .editor-btn:hover {
+                background: #2980b9;
+            }
+            .editor-tool-btn {
+                padding: 12px;
+                font-size: 14px;
+                background: #3498db;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+                text-align: left;
+            }
+            .editor-tool-btn:hover {
+                background: #2980b9;
+            }
+            #editor-left-toolbar::-webkit-scrollbar,
+            #editor-right-toolbar::-webkit-scrollbar {
+                width: 8px;
+            }
+            #editor-left-toolbar::-webkit-scrollbar-track,
+            #editor-right-toolbar::-webkit-scrollbar-track {
+                background: rgba(0, 0, 0, 0.2);
+            }
+            #editor-left-toolbar::-webkit-scrollbar-thumb,
+            #editor-right-toolbar::-webkit-scrollbar-thumb {
+                background: #3498db;
+                border-radius: 4px;
+        }
         </style>
     </head>
     <body>
-        <div id="info">
+        <div id="info" style="display: none;">
             <div id="info-header" style="cursor: pointer; user-select: none; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px; margin-bottom: 5px;">
                 <strong>▼ Controls & Info</strong>
             </div>
@@ -62,6 +102,7 @@
                 <div>G - Load Game Config (JSON)</div>
                 <div>P - Load Player Config (JSON)</div>
                 <div>Ctrl+D - Toggle This Panel</div>
+                <div>Ctrl+I - Toggle Editor Mode</div>
                 <div>Ctrl+L - Toggle Debug Labels</div>
                 <div>Ctrl+Y - Toggle Wireframes</div>
                 <div>Mouse Wheel - Zoom In/Out</div>

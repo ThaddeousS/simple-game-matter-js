@@ -22,6 +22,14 @@ export class Player extends Entity {
     }
 
     update(input) {
+        // Check if player is destroyed or has no health
+        if (this.isDestroyed) return;
+        
+        if (this.health <= 0) {
+            this.destroy();
+            return;
+        }
+
         const { Body } = Matter;
 
         // Horizontal movement

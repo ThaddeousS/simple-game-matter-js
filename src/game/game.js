@@ -3,11 +3,13 @@ import { Camera } from '../camera/camera.js';
 import { InputHandler } from '../input/input-handler.js';
 import { Player } from './entity/player/player.js';
 import { Entity } from './entity/entity.js';
+import { Trigger } from './entity/trigger.js';
+import { Editor } from '../editor/editor.js'
 
 export class Game {
     constructor() {
         // Module aliases
-        const { Engine, Render, World, Bodies, Runner, Events } = Matter;
+        const { Engine, Render, Runner } = Matter;
 
         // Load game config, player config, and level data
         this.gameConfig = this.getDefaultGameConfig();
@@ -17,6 +19,7 @@ export class Game {
         // Initialize debug states separately
         this.debugLabels = this.gameConfig.debug || false;
         this.wireframes = false;
+        this.inputDisabled = false;
         
         // Validate and set initial zoom from level config
         const configZoom = this.levelData.zoom !== undefined ? this.levelData.zoom : 1;
@@ -93,6 +96,9 @@ export class Game {
         // Set up collision detection
         this.setupCollisionDetection();
 
+        // Initialize editor
+        this.editor = new Editor(this);
+
         // Game loop
         this.gameLoop();
     }
@@ -127,6 +133,32 @@ export class Game {
                         }
                     }
                 }
+                
+                // Check for trigger collisions
+                this.triggers.forEach(trigger => {
+                    if (bodyA === trigger.body) {
+                        trigger.handleCollisionStart(bodyB);
+                    } else if (bodyB === trigger.body) {
+                        trigger.handleCollisionStart(bodyA);
+                    }
+                });
+            });
+        });
+        
+        Events.on(this.engine, 'collisionEnd', (event) => {
+            const pairs = event.pairs;
+            
+            pairs.forEach((pair) => {
+                const { bodyA, bodyB } = pair;
+                
+                // Check for trigger exit events
+                this.triggers.forEach(trigger => {
+                    if (bodyA === trigger.body) {
+                        trigger.handleCollisionEnd(bodyB);
+                    } else if (bodyB === trigger.body) {
+                        trigger.handleCollisionEnd(bodyA);
+                    }
+                });
             });
         });
     }
@@ -146,6 +178,30 @@ export class Game {
     hideGameOver() {
         const dialog = document.getElementById('game-over-dialog');
         dialog.style.display = 'none';
+    }
+
+    pauseSimulation() {
+        // Pause the physics engine
+        const { Runner } = Matter;
+        Runner.stop(this.runner);
+        
+        // Disable input
+        this.inputDisabled = true;
+        
+        // Disable camera following
+        this.camera.followEnabled = false;
+    }
+
+    resumeSimulation() {
+        // Resume the physics engine
+        const { Runner } = Matter;
+        Runner.run(this.runner, this.engine);
+        
+        // Enable input
+        this.inputDisabled = false;
+        
+        // Enable camera following
+        this.camera.followEnabled = true;
     }
 
     setupCustomRendering() {
@@ -317,6 +373,17 @@ export class Game {
                 { "x": -400, "y": 100, "shape": "circle", "radius": 35, "color": "#2ecc71", "label": "circle_3" },
                 { "x": 150, "y": 200, "shape": "circle", "radius": 28, "color": "#f39c12", "label": "circle_4" },
                 { "x": 500, "y": -50, "shape": "circle", "radius": 40, "color": "#9b59b6", "label": "circle_5" }
+            ],
+            "triggers": [
+                {
+                    "x": -100,
+                    "y": -400,
+                    "width": 100,
+                    "height": 100,
+                    "label": "test_trigger",
+                    "triggerType": "test",
+                    "color": "#00ffff33"
+                }
             ]
         };
     }
@@ -408,6 +475,7 @@ export class Game {
 
         const bodies = [];
         this.entities = []; // Store entity instances
+        this.triggers = []; // Store trigger instances
         this.killBoxes = []; // Store kill box references
 
         // Create boundaries if enabled
@@ -457,6 +525,34 @@ export class Game {
             level.entities.forEach((entityConfig) => {
                 const entity = new Entity(entityConfig, this.world);
                 this.entities.push(entity);
+            });
+        }
+
+        // Create triggers from the triggers array
+        if (level.triggers) {
+            level.triggers.forEach((triggerConfig) => {
+                const trigger = new Trigger(triggerConfig, this.world);
+                
+                // Add test logging for the test_trigger
+                if (trigger.config.label === 'test_trigger') {
+                    trigger.onEnter = (otherBody) => {
+                        if (this.player && otherBody === this.player.body) {
+                            console.log('Player entered test_trigger');
+                        }
+                    };
+                    trigger.onExit = (otherBody) => {
+                        if (this.player && otherBody === this.player.body) {
+                            console.log('Player exited test_trigger');
+                        }
+                    };
+                    trigger.onStay = (otherBody) => {
+                        if (this.player && otherBody === this.player.body) {
+                            console.log('Player is inside test_trigger');
+                        }
+                    };
+                }
+                
+                this.triggers.push(trigger);
             });
         }
 
@@ -524,6 +620,13 @@ export class Game {
                     this.camera.setZoom(this.levelData.zoom || 1);
                     this.updateZoom();
                 }
+                return;
+            }
+
+            // Ctrl+I can always be used to toggle editor mode
+            if ((e.key === 'i' || e.key === 'I') && e.ctrlKey) {
+                e.preventDefault();
+                this.editor.toggle();
                 return;
             }
             
@@ -654,8 +757,8 @@ export class Game {
     }
 
     updateCamera() {
-        // Update player based on input
-        if (this.player) {
+        // Update player based on input (only if input is not disabled)
+        if (this.player && !this.inputDisabled) {
             this.player.update(this.input);
         }
 
@@ -678,6 +781,19 @@ export class Game {
 
     gameLoop() {
         this.updateCamera();
+        
+        // Check if debug panel is visible
+        const infoPanel = document.getElementById('info');
+        const isPanelVisible = infoPanel && infoPanel.style.display !== 'none';
+        
+        // Update trigger visibility based on debug panel state
+        if (this.triggers) {
+            this.triggers.forEach(trigger => {
+                trigger.body.render.visible = isPanelVisible;
+                trigger.update();
+            });
+        }
+        
         requestAnimationFrame(() => this.gameLoop());
     }
 }
