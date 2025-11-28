@@ -120,23 +120,29 @@ export class Entity {
 
         const pos = this.body.position;
         
-        // Calculate screen position relative to camera
-        const screenX = pos.x - camera.x + camera.width / 2;
-        const screenY = pos.y - camera.y + camera.height / 2;
+        // Calculate screen position relative to camera (accounting for zoom)
+        const viewWidth = camera.width / camera.zoom;
+        const viewHeight = camera.height / camera.zoom;
+        const scale = camera.width / viewWidth;
+        const screenX = ((pos.x - camera.x) / viewWidth) * camera.width + camera.width / 2;
+        const screenY = ((pos.y - camera.y) / viewHeight) * camera.height + camera.height / 2;
 
-        // Position health display above the entity
-        const offsetY = this.config.shape === 'circle' ? this.config.radius + 20 : this.config.height / 2 + 20;
+        // Calculate offset that scales with the entity
+        const offsetY = (this.config.shape === 'circle' ? this.config.radius : this.config.height / 2);
+        const spacing = 20; // World-space distance above entity
+        const scaledOffsetY = (offsetY + spacing) * scale;
 
         if (this.healthDisplay === 'bar') {
-            this.renderHealthBar(ctx, screenX, screenY - offsetY);
+            this.renderHealthBar(ctx, screenX, screenY - scaledOffsetY, scale);
         } else if (this.healthDisplay === 'text') {
-            this.renderHealthText(ctx, screenX, screenY - offsetY);
+            this.renderHealthText(ctx, screenX, screenY - scaledOffsetY, scale);
         }
     }
 
-    renderHealthBar(ctx, x, y) {
-        const barWidth = 50;
-        const barHeight = 6;
+    renderHealthBar(ctx, x, y, scale) {
+        // Scale the bar size with zoom to keep it proportional to objects
+        const barWidth = 50 * scale;
+        const barHeight = 6 * scale;
         const healthPercent = this.health / this.maxHealth;
 
         // Background (red)
@@ -147,15 +153,18 @@ export class Entity {
         ctx.fillStyle = '#00ff00';
         ctx.fillRect(x - barWidth / 2, y, barWidth * healthPercent, barHeight);
 
-        // Border
+        // Border (scale line width too)
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = Math.max(1, scale);
         ctx.strokeRect(x - barWidth / 2, y, barWidth, barHeight);
     }
 
-    renderHealthText(ctx, x, y) {
+    renderHealthText(ctx, x, y, scale) {
+        // Scale the font size with zoom to keep it proportional to objects
+        const fontSize = Math.max(8, 12 * scale); // Minimum 8px for readability
+        
         ctx.fillStyle = '#ffffff';
-        ctx.font = '12px Arial';
+        ctx.font = `${fontSize}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(`${Math.round(this.health)}/${this.maxHealth}`, x, y);
@@ -166,13 +175,20 @@ export class Entity {
 
         const pos = this.body.position;
         
-        // Calculate screen position relative to camera
-        const screenX = pos.x - camera.x + camera.width / 2;
-        const screenY = pos.y - camera.y + camera.height / 2;
+        // Calculate screen position relative to camera (accounting for zoom)
+        const viewWidth = camera.width / camera.zoom;
+        const viewHeight = camera.height / camera.zoom;
+        const screenX = ((pos.x - camera.x) / viewWidth) * camera.width + camera.width / 2;
+        const screenY = ((pos.y - camera.y) / viewHeight) * camera.height + camera.height / 2;
+
+        // Scale font size with zoom to keep it proportional to objects
+        const scale = camera.width / viewWidth;
+        const labelFontSize = Math.max(8, 10 * scale);
+        const collisionFontSize = Math.max(6, 8 * scale);
 
         // Draw label centered on entity
         ctx.fillStyle = '#ffff00';
-        ctx.font = 'bold 10px Arial';
+        ctx.font = `bold ${labelFontSize}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(this.config.label, screenX, screenY);
@@ -180,8 +196,8 @@ export class Entity {
         // Draw collision indicator
         if (this.config.collisions === 'off') {
             ctx.fillStyle = '#ff00ff';
-            ctx.font = '8px Arial';
-            ctx.fillText('[NO COLLISION]', screenX, screenY + 12);
+            ctx.font = `${collisionFontSize}px Arial`;
+            ctx.fillText('[NO COLLISION]', screenX, screenY + (12 * scale));
         }
     }
 

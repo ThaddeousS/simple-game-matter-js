@@ -18,14 +18,21 @@ export class Game {
         this.debugLabels = this.gameConfig.debug || false;
         this.wireframes = false;
         
+        // Validate and set initial zoom from level config
+        const configZoom = this.levelData.zoom !== undefined ? this.levelData.zoom : 1;
+        const validatedZoom = this.validateZoom(configZoom);
+        if (validatedZoom !== configZoom) {
+            this.levelData.zoom = validatedZoom;
+        }
+        
         // Set aspect ratio from game config (default to 16:9 if not specified)
         try {
             this.aspectRatio = this.gameConfig.aspectRatio 
                 ? this.parseAspectRatio(this.gameConfig.aspectRatio)
                 : (16 / 9);
         } catch (error) {
-            console.error('Aspect ratio error:', error.message);
-            alert(error.message + '\n\nDefaulting to 16:9');
+            alert('Invalid aspect ratio in game config.\n' + error.message + '\n\nReverting to default 16:9');
+            this.gameConfig.aspectRatio = "16:9";
             this.aspectRatio = 16 / 9;
         }
         
@@ -50,6 +57,9 @@ export class Game {
 
         // Initialize camera
         this.camera = new Camera(0, 0, dimensions.width, dimensions.height);
+        
+        // Set initial zoom from level config
+        this.camera.setZoom(this.levelData.zoom);
 
         // Initialize input
         this.input = new InputHandler();
@@ -233,6 +243,22 @@ export class Game {
         );
     }
 
+    validateZoom(zoom) {
+        // Check if zoom is 0 or less
+        if (zoom <= 0) {
+            alert(`Invalid zoom level: ${zoom}\nZoom must be greater than 0.\n\nResetting to default zoom: 1`);
+            return 1;
+        }
+        
+        // Check if zoom is greater than 100
+        if (zoom > 100) {
+            alert(`Invalid zoom level: ${zoom}\nZoom is too large (maximum: 100).\n\nResetting to default zoom: 1`);
+            return 1;
+        }
+        
+        return zoom;
+    }
+
     getDefaultGameConfig() {
         return {
             "aspectRatio": "16:9",
@@ -265,6 +291,7 @@ export class Game {
         return {
             "worldSize": 3000,
             "wallThickness": 50,
+            "zoom": 1,
             "boundaries": {
                 "enabled": true
             },
@@ -299,10 +326,21 @@ export class Game {
         reader.onload = (e) => {
             try {
                 const levelData = JSON.parse(e.target.result);
+                
+                // Validate zoom if specified
+                if (levelData.zoom !== undefined) {
+                    const validatedZoom = this.validateZoom(levelData.zoom);
+                    levelData.zoom = validatedZoom;
+                }
+                
                 this.levelData = levelData;
+                
+                // Apply zoom from level config
+                this.camera.setZoom(this.levelData.zoom || 1);
+                this.updateZoom();
+                
                 this.resetWorld();
             } catch (error) {
-                console.error('Error parsing level file:', error);
                 alert('Invalid level file format. Please check the JSON structure.');
             }
         };
@@ -330,8 +368,7 @@ export class Game {
                         this.render.options.width = dimensions.width;
                         this.render.options.height = dimensions.height;
                     } catch (aspectError) {
-                        console.error('Aspect ratio error:', aspectError.message);
-                        alert(aspectError.message + '\n\nKeeping current aspect ratio.');
+                        alert('Invalid aspect ratio in game config.\n' + aspectError.message + '\n\nReverting to current aspect ratio.');
                     }
                 }
                 
@@ -341,7 +378,6 @@ export class Game {
                     this.updateDebugStatus();
                 }
             } catch (error) {
-                console.error('Error parsing game config file:', error);
                 alert('Invalid game config file format. Please check the JSON structure.');
             }
         };
@@ -364,7 +400,6 @@ export class Game {
 
     createWorld() {
         if (!this.levelData) {
-            console.warn('Level data not loaded yet');
             return;
         }
 
@@ -455,6 +490,22 @@ export class Game {
             this.render.options.height = dimensions.height;
         });
 
+        // Handle mouse wheel zoom (only when debug panel is open)
+        window.addEventListener('wheel', (e) => {
+            const infoPanel = document.getElementById('info');
+            const isPanelVisible = infoPanel && infoPanel.style.display !== 'none';
+            
+            if (isPanelVisible) {
+                e.preventDefault();
+                
+                // Adjust zoom based on wheel delta
+                const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
+                this.camera.setZoom(this.camera.zoom * zoomDelta);
+                
+                this.updateZoom();
+            }
+        }, { passive: false });
+
         // Handle keyboard shortcuts
         window.addEventListener('keydown', (e) => {
             // Ctrl+D can always be used to toggle the panel
@@ -469,6 +520,9 @@ export class Game {
                     // Hiding panel - disable visual debug features but preserve settings
                     infoPanel.style.display = 'none';
                     this.render.options.wireframes = false;
+                    // Reset zoom to level config default
+                    this.camera.setZoom(this.levelData.zoom || 1);
+                    this.updateZoom();
                 }
                 return;
             }
@@ -562,7 +616,29 @@ export class Game {
 
     updateDebugStatus() {
         document.getElementById('debug-status').textContent = 
-            `Debug Labels: ${this.debugLabels ? 'ON' : 'OFF'} | Wireframes: ${this.wireframes ? 'ON' : 'OFF'}`;
+            `Debug Labels: ${this.debugLabels ? 'ON' : 'OFF'} | Wireframes: ${this.wireframes ? 'ON' : 'OFF'} | Zoom: ${this.camera.zoom.toFixed(2)}x`;
+    }
+
+    updateZoom() {
+        // Update the render bounds based on zoom level
+        const { Render } = Matter;
+        
+        // Calculate bounds based on zoom
+        const viewWidth = this.camera.width / this.camera.zoom;
+        const viewHeight = this.camera.height / this.camera.zoom;
+        
+        Render.lookAt(this.render, {
+            min: { 
+                x: this.camera.x - viewWidth / 2, 
+                y: this.camera.y - viewHeight / 2 
+            },
+            max: { 
+                x: this.camera.x + viewWidth / 2, 
+                y: this.camera.y + viewHeight / 2 
+            }
+        });
+        
+        this.updateDebugStatus();
     }
 
     resetWorld() {
@@ -586,19 +662,8 @@ export class Game {
         // Update camera to follow player
         this.camera.update();
 
-        // Update the render bounds to follow the camera
-        // Matter.js Render.lookAt expects bounds in this format
-        const { Render } = Matter;
-        Render.lookAt(this.render, {
-            min: { 
-                x: this.camera.x - this.camera.width / 2, 
-                y: this.camera.y - this.camera.height / 2 
-            },
-            max: { 
-                x: this.camera.x + this.camera.width / 2, 
-                y: this.camera.y + this.camera.height / 2 
-            }
-        });
+        // Update the render bounds with zoom applied
+        this.updateZoom();
 
         // Update UI
         if (this.player && !this.player.isDestroyed) {

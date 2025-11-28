@@ -6,6 +6,7 @@ export class Camera {
         this.height = height;
         this.target = null;
         this.smoothing = 0.1; // Smooth camera follow (0 = instant, 1 = no follow)
+        this.zoom = 1; // Default zoom level (1 = normal, >1 = zoomed in, <1 = zoomed out)
     }
 
     setTarget(target) {
@@ -21,6 +22,15 @@ export class Camera {
             this.x += (targetX - this.x) * this.smoothing;
             this.y += (targetY - this.y) * this.smoothing;
         }
+    }
+
+    setZoom(zoomLevel) {
+        // Clamp zoom between 0.1 and 5
+        this.zoom = Math.max(0.1, Math.min(5, zoomLevel));
+    }
+
+    resetZoom() {
+        this.zoom = 1;
     }
 
     worldToScreen(worldX, worldY) {
