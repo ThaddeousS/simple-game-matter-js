@@ -6,7 +6,7 @@ import { Player } from '../player/player.js';
 export class Game {
     constructor() {
         // Module aliases
-        const { Engine, Render, World, Bodies, Body, Events, Runner } = Matter;
+        const { Engine, Render, Runner } = Matter;
 
         // Create engine
         this.engine = Engine.create();
