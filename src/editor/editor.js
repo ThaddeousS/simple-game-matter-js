@@ -26,8 +26,9 @@ export class Editor {
     this.leftExpanded = false;
     this.rightExpanded = false;
 
-    // Initial game state for reset
-    this.initialGameState = null;
+    // State management
+    this.defaultState = null; // The default state to revert to
+    this.workingState = null; // Current working state while editing
 
     // Track entities that have been manually deleted (to not recreate on reset)
     this.deletedEntityIds = new Set();
@@ -81,7 +82,7 @@ export class Editor {
                     gap: 15px;
                 `;
     this.topToolbar.innerHTML = `
-                    <button class="editor-btn" id="editor-reset-btn" style="background: #f39c12;">Reset</button>
+                    <button class="editor-btn" id="editor-revert-btn" style="background: #9b59b6;">Reset</button>
                     <button class="editor-btn" id="editor-save-btn">Save</button>
                     <button class="editor-btn" id="editor-load-btn">Load</button>
                     <button class="editor-btn" id="editor-exit-btn" style="background: #e74c3c;">Exit</button>
@@ -160,11 +161,6 @@ export class Editor {
 
   setupEventListeners() {
     // Reset button
-    document
-      .getElementById("editor-reset-btn")
-      .addEventListener("click", () => {
-        this.resetToInitialState();
-      });
 
     // Exit button
     document.getElementById("editor-exit-btn").addEventListener("click", () => {
@@ -388,8 +384,7 @@ export class Editor {
     html +=
       '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto;">';
     html += `<input type="checkbox" id="physics-static-checkbox" style="width: 16px; height: 16px; cursor: pointer;" ${!entity.body.isStatic ? "checked" : ""}>`;
-    html +=
-      '<div style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">Physics (Static)</div>';
+    html += `<div id="physics-label" style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">${!entity.body.isStatic ? "Physics (enabled)" : "Physics (disabled)"}</div>`;
     html += "</div>";
     html += `<div id="physics-properties-container" style="display: ${!entity.body.isStatic ? "block" : "none"};">`;
     html += this.createPropertyInput(
@@ -427,8 +422,7 @@ export class Editor {
     html +=
       '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto;">';
     html += `<input type="checkbox" id="collision-enabled-checkbox" style="width: 16px; height: 16px; cursor: pointer;" ${config.collisionsEnabled !== false ? "checked" : ""}>`;
-    html +=
-      '<div style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">Collision</div>';
+    html += `<div id="collision-label" style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">${config.collisionsEnabled !== false ? "Collision (enabled)" : "Collision (disabled)"}</div>`;
     html += "</div>";
     html += `<div id="collision-properties-container" style="display: ${config.collisionsEnabled !== false ? "block" : "none"};">`;
     html += this.createPropertyInput(
@@ -439,7 +433,7 @@ export class Editor {
       1,
       null,
       null,
-      ["on"]
+      ["solid", "trigger"]
     );
     html += "</div>";
     html += "</div>";
@@ -733,12 +727,20 @@ export class Editor {
     const physicsPropertiesContainer = document.getElementById(
       "physics-properties-container"
     );
+    const physicsLabel = document.getElementById("physics-label");
     if (physicsStaticCheckbox && physicsPropertiesContainer) {
       physicsStaticCheckbox.addEventListener("change", (e) => {
         const physicsEnabled = e.target.checked;
         const isStatic = !physicsEnabled; // Invert: checked = physics enabled = not static
         Body.setStatic(entity.body, isStatic);
         entity.updateConfigProperty("isStatic", isStatic);
+
+        // Update label text based on state
+        if (physicsLabel) {
+          physicsLabel.textContent = physicsEnabled
+            ? "Physics (enabled)"
+            : "Physics (disabled)";
+        }
 
         // Show physics properties when checked (physics enabled), hide when unchecked
         if (physicsEnabled) {
@@ -783,32 +785,47 @@ export class Editor {
     const collisionPropertiesContainer = document.getElementById(
       "collision-properties-container"
     );
+    const collisionLabel = document.getElementById("collision-label");
     if (collisionEnabledCheckbox && collisionPropertiesContainer) {
       collisionEnabledCheckbox.addEventListener("change", (e) => {
         const enabled = e.target.checked;
         entity.updateConfigProperty("collisionsEnabled", enabled);
 
+        // Update label text based on state
+        if (collisionLabel) {
+          collisionLabel.textContent = enabled
+            ? "Collision (enabled)"
+            : "Collision (disabled)";
+        }
+
         if (enabled) {
           collisionPropertiesContainer.style.display = "block";
-          // Enable collisions
-          entity.updateConfigProperty("collisions", "on");
+          // Enable collisions with solid type by default
+          entity.updateConfigProperty("collisions", "solid");
           entity.body.isSensor = false;
+          // Reset collision group to default (0 = collides with everything)
+          entity.body.collisionFilter.group = 0;
         } else {
           collisionPropertiesContainer.style.display = "none";
-          // Disable collisions (make it a sensor)
+          // Disable collisions completely
           entity.updateConfigProperty("collisions", "off");
-          entity.body.isSensor = true;
+          entity.body.isSensor = false;
+          // Set collision group to negative to bypass all Matter.js collisions
+          entity.body.collisionFilter.group = -1;
         }
+
+        // Update working state so changes persist
+        editor.updateWorkingState();
       });
     }
 
-    // Collision type dropdown (currently only 'on' option)
+    // Collision type dropdown ('solid' or 'trigger')
     const collisionsInput = document.getElementById("prop-collisions");
     if (collisionsInput) {
       collisionsInput.addEventListener("change", (e) => {
         entity.updateConfigProperty("collisions", e.target.value);
-        // Update sensor state based on collision type
-        entity.body.isSensor = e.target.value === "off";
+        // Update sensor state: 'trigger' = sensor (no physical collision), 'solid' = normal collision
+        entity.body.isSensor = e.target.value === "trigger";
       });
     }
 
@@ -877,12 +894,19 @@ export class Editor {
     const canvas = this.game.render.canvas;
 
     if (this.isActive) {
-      // Entering editor mode - auto reset to initial state
-      this.resetToInitialState();
+      // Entering editor mode - save current state as working state
+      this.saveWorkingState();
       this.game.pauseSimulation();
       canvas.style.cursor = "grab";
+
+      // Highlight the select tool button (default active tool)
+      const selectBtn = document.getElementById("tool-select");
+      if (selectBtn) {
+        selectBtn.style.background = "#2ecc71";
+      }
     } else {
-      // Exiting editor mode
+      // Exiting editor mode - apply working state as new default and restart
+      this.applyWorkingState();
       this.game.resumeSimulation();
       canvas.style.cursor = "default";
       this.isDragging = false;
@@ -956,6 +980,21 @@ export class Editor {
 
   setupToolListeners() {
     const canvas = this.game.render.canvas;
+
+    // Setup Revert to Default button
+    const revertBtn = document.getElementById("editor-revert-btn");
+    if (revertBtn) {
+      revertBtn.addEventListener("click", () => {
+        this.revertToDefault();
+        // Visual feedback
+        revertBtn.textContent = "Reset!";
+        revertBtn.style.background = "#27ae60";
+        setTimeout(() => {
+          revertBtn.textContent = "Reset";
+          revertBtn.style.background = "#9b59b6";
+        }, 1000);
+      });
+    }
 
     // Setup save button
     const saveBtn = document.getElementById("editor-save-btn");
@@ -1058,141 +1097,121 @@ export class Editor {
   }
 
   resetToInitialState() {
-    if (!this.initialGameState) {
-      // If no initial state saved, save current state as initial
-      this.saveInitialState();
-      return;
-    }
+    // Backward compatibility wrapper - now uses new state system
+    this.revertToDefault();
+  }
 
+  saveWorkingState() {
+    // Save current game state as working state
+    const { Body } = Matter;
+
+    this.workingState = {
+      playerPosition: { ...this.game.player.body.position },
+      playerVelocity: { ...this.game.player.body.velocity },
+      playerAngle: this.game.player.body.angle,
+      playerAngularVelocity: this.game.player.body.angularVelocity,
+      playerHealth: this.game.player.health,
+      cameraPosition: { x: this.game.camera.x, y: this.game.camera.y },
+      cameraZoom: this.game.camera.zoom,
+      entities: this.game.entities.map((entity) => ({
+        position: { ...entity.body.position },
+        velocity: { ...entity.body.velocity },
+        angle: entity.body.angle,
+        angularVelocity: entity.body.angularVelocity,
+        health: entity.health,
+        isDestroyed: entity.isDestroyed,
+        config: entity.getEntityConfig().get(),
+        bodyId: entity.body.id,
+      })),
+      triggers: this.game.triggers.map((trigger) => ({
+        entitiesInside: new Set(trigger.entitiesInside),
+      })),
+    };
+
+    // If no default state exists, save current as default
+    if (!this.defaultState) {
+      this.defaultState = JSON.parse(JSON.stringify(this.workingState));
+    }
+  }
+
+  updateWorkingState() {
+    // Update the working state with current game state
+    this.saveWorkingState();
+  }
+
+  applyWorkingState() {
+    // Save current state as working state, then apply as new default
+    this.saveWorkingState();
+    if (this.workingState) {
+      this.defaultState = JSON.parse(JSON.stringify(this.workingState));
+      this.restoreState(this.defaultState);
+    }
+  }
+
+  revertToDefault() {
+    // Revert to the default state
+    if (this.defaultState) {
+      this.restoreState(this.defaultState);
+      // Update working state to match default
+      this.workingState = JSON.parse(JSON.stringify(this.defaultState));
+      // Clear deleted entities tracking
+      this.deletedEntityIds.clear();
+    }
+  }
+
+  restoreState(state) {
+    // Generic method to restore game state
     const { Body, World } = Matter;
 
     // Restore player state
-    Body.setPosition(
-      this.game.player.body,
-      this.initialGameState.playerPosition
-    );
-    Body.setVelocity(
-      this.game.player.body,
-      this.initialGameState.playerVelocity
-    );
-    Body.setAngle(this.game.player.body, this.initialGameState.playerAngle);
-    Body.setAngularVelocity(
-      this.game.player.body,
-      this.initialGameState.playerAngularVelocity
-    );
-    this.game.player.health = this.initialGameState.playerHealth;
+    Body.setPosition(this.game.player.body, state.playerPosition);
+    Body.setVelocity(this.game.player.body, state.playerVelocity);
+    Body.setAngle(this.game.player.body, state.playerAngle);
+    Body.setAngularVelocity(this.game.player.body, state.playerAngularVelocity);
+    this.game.player.health = state.playerHealth;
 
-    // If player was destroyed, restore it
     if (this.game.player.isDestroyed) {
       this.game.player.isDestroyed = false;
       World.add(this.game.world, this.game.player.body);
     }
 
     // Restore camera
-    this.game.camera.x = this.initialGameState.cameraPosition.x;
-    this.game.camera.y = this.initialGameState.cameraPosition.y;
-    this.game.camera.zoom = this.initialGameState.cameraZoom;
+    this.game.camera.x = state.cameraPosition.x;
+    this.game.camera.y = state.cameraPosition.y;
+    this.game.camera.zoom = state.cameraZoom;
 
-    // Build a map of current entities by body ID
-    const currentEntitiesMap = new Map();
-    this.game.entities.forEach((entity) => {
-      currentEntitiesMap.set(entity.body.id, entity);
+    // Clear current entities
+    this.game.entities.forEach((entity) => entity.destroy());
+    this.game.entities = [];
+
+    // Recreate entities from state
+    state.entities.forEach((savedEntity) => {
+      const entity = new Entity(savedEntity.config, this.game.world);
+      Body.setPosition(entity.body, savedEntity.position);
+      Body.setVelocity(entity.body, savedEntity.velocity);
+      Body.setAngle(entity.body, savedEntity.angle);
+      Body.setAngularVelocity(entity.body, savedEntity.angularVelocity);
+      entity.health = savedEntity.health;
+      entity.isDestroyed = savedEntity.isDestroyed;
+      this.game.entities.push(entity);
     });
 
-    // Build a map of initial entities by body ID
-    const initialEntitiesMap = new Map();
-    this.initialGameState.entities.forEach((savedEntity) => {
-      initialEntitiesMap.set(savedEntity.bodyId, savedEntity);
-    });
-
-    // Find entities to remove (exist now but didn't exist initially)
-    const entitiesToRemove = [];
-    this.game.entities.forEach((entity) => {
-      if (!initialEntitiesMap.has(entity.body.id)) {
-        entitiesToRemove.push(entity);
-      }
-    });
-
-    // Remove entities that were created during edit mode
-    entitiesToRemove.forEach((entity) => {
-      entity.destroy();
-      const index = this.game.entities.indexOf(entity);
-      if (index > -1) {
-        this.game.entities.splice(index, 1);
-      }
-    });
-
-    // Restore or recreate entities that existed initially
-    const restoredEntities = [];
-    this.initialGameState.entities.forEach((savedEntity) => {
-      // Skip entities that were manually deleted
-      if (this.deletedEntityIds.has(savedEntity.bodyId)) {
-        return;
-      }
-
-      const currentEntity = currentEntitiesMap.get(savedEntity.bodyId);
-
-      if (currentEntity) {
-        // Entity still exists, restore its state
-        Body.setPosition(currentEntity.body, savedEntity.position);
-        Body.setVelocity(currentEntity.body, savedEntity.velocity);
-        Body.setAngle(currentEntity.body, savedEntity.angle);
-        Body.setAngularVelocity(
-          currentEntity.body,
-          savedEntity.angularVelocity
-        );
-        currentEntity.health = savedEntity.health;
-        currentEntity.isDestroyed = savedEntity.isDestroyed;
-
-        // If entity was destroyed, restore it to the world
-        if (savedEntity.isDestroyed === false && currentEntity.isDestroyed) {
-          currentEntity.isDestroyed = false;
-          World.add(this.game.world, currentEntity.body);
-        }
-
-        restoredEntities.push(currentEntity);
-      } else {
-        // Entity was deleted but NOT manually (e.g., destroyed by game logic)
-        // Recreate it from saved config
-        const recreatedEntity = new Entity(savedEntity.config, this.game.world);
-
-        // Set the physical state to match saved state
-        Body.setPosition(recreatedEntity.body, savedEntity.position);
-        Body.setVelocity(recreatedEntity.body, savedEntity.velocity);
-        Body.setAngle(recreatedEntity.body, savedEntity.angle);
-        Body.setAngularVelocity(
-          recreatedEntity.body,
-          savedEntity.angularVelocity
-        );
-        recreatedEntity.health = savedEntity.health;
-        recreatedEntity.isDestroyed = savedEntity.isDestroyed;
-
-        restoredEntities.push(recreatedEntity);
-      }
-    });
-
-    // Replace entities array with restored entities
-    this.game.entities = restoredEntities;
-
-    // Restore triggers
-    this.game.triggers.forEach((trigger, index) => {
-      if (this.initialGameState.triggers[index]) {
-        trigger.entitiesInside = new Set(
-          this.initialGameState.triggers[index].entitiesInside
-        );
-      }
-    });
-
-    // Hide game over dialog if visible
-    this.game.hideGameOver();
-
-    // Clear any selection
+    // Clear selection
     if (this.tools.select) {
       this.tools.select.selectedEntity = null;
+      this.tools.select.currentSubTool = null;
     }
 
     // Update properties panel
     this.updatePropertiesPanel();
+
+    // Force a small delay to ensure everything is refreshed
+    setTimeout(() => {
+      // Ensure UI is in sync
+      if (this.tools.select) {
+        this.tools.select.selectedEntity = null;
+      }
+    }, 10);
   }
 
   showSaveDialog() {
@@ -1362,8 +1381,8 @@ export class Editor {
         // Clear deletion tracking for new level
         this.deletedEntityIds.clear();
 
-        // Update editor state
-        this.saveInitialState();
+        // Save loaded level as new default and working state
+        this.saveWorkingState();
         this.updatePropertiesPanel();
 
         alert("Level config loaded successfully!");

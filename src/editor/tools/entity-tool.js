@@ -227,8 +227,8 @@ export class EntityTool extends Tool {
     const newEntity = new Entity(entityConfig, this.editor.game.world);
     this.editor.game.entities.push(newEntity);
 
-    // Save initial state to include this new entity
-    this.editor.saveInitialState();
+    // Update working state to include this new entity
+    this.editor.updateWorkingState();
   }
 
   onActivate() {

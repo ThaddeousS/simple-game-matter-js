@@ -139,9 +139,9 @@ export class Game {
     // Game loop
     this.gameLoop();
 
-    // Save initial state after everything is loaded
+    // Save initial state as default after everything is loaded
     requestAnimationFrame(() => {
-      this.editor.saveInitialState();
+      this.editor.saveWorkingState();
     });
   }
 
@@ -963,6 +963,13 @@ export class Game {
   }
 
   resetWorld() {
+    // If editor exists and has default state, restore it
+    if (this.editor && this.editor.defaultState) {
+      this.editor.restoreState(this.editor.defaultState);
+      return;
+    }
+
+    // Otherwise do standard reset
     const { World } = Matter;
     World.clear(this.world);
     this.engine.world = this.world;

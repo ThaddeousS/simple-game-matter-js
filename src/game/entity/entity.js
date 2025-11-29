@@ -20,8 +20,8 @@ export class Entity {
     this.healthDisplay = this.config.healthDisplay;
     this.isDestroyed = false;
 
-    // Determine if this is a sensor (no collisions)
-    const isSensor = this.config.collisions === "off";
+    // Determine if this is a sensor (trigger vs solid collision)
+    const isSensor = this.config.collisions === "trigger";
 
     // Create the physical body based on shape
     if (this.config.shape === "circle") {
@@ -102,6 +102,12 @@ export class Entity {
     if (this.config.rotation !== undefined && this.config.rotation !== 0) {
       const { Body } = Matter;
       Body.setAngle(this.body, (this.config.rotation * Math.PI) / 180);
+    }
+
+    // Handle collision enabled/disabled state
+    if (this.config.collisionsEnabled === false) {
+      // Collisions disabled: set collision group to -1 to bypass all collision detection
+      this.body.collisionFilter.group = -1;
     }
 
     // Add to world
