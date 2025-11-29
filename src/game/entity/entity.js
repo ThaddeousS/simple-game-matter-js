@@ -1,220 +1,253 @@
-import { EntityConfig } from '../../config/entity-config.js';
-import Matter from 'matter-js';
+import { EntityConfig } from "../../config/entity-config.js";
+import Matter from "matter-js";
 
 export class Entity {
-    constructor(config, world) {
-        const { Bodies, World } = Matter;
-        
-        // Store reference to world for cleanup
-        this.world = world;
-        
-        // Create EntityConfig instance with provided config
-        this.entityConfig = new EntityConfig(config);
-        
-        // Get the merged config (defaults + provided)
-        this.config = this.entityConfig.get();
+  constructor(config, world) {
+    const { Bodies, World } = Matter;
 
-        // Health properties
-        this.health = this.config.health;
-        this.maxHealth = this.config.maxHealth;
-        this.healthDisplay = this.config.healthDisplay;
-        this.isDestroyed = false;
+    // Store reference to world for cleanup
+    this.world = world;
 
-        // Determine if this is a sensor (no collisions)
-        const isSensor = this.config.collisions === 'off';
+    // Create EntityConfig instance with provided config
+    this.entityConfig = new EntityConfig(config);
 
-        // Create the physical body based on shape
-        if (this.config.shape === 'circle') {
-            this.body = Bodies.circle(
-                this.config.x,
-                this.config.y,
-                this.config.radius,
-                {
-                    render: { 
-                        fillStyle: this.config.color,
-                        strokeStyle: this.config.strokeColor,
-                        lineWidth: this.config.strokeWidth
-                    },
-                    friction: this.config.friction,
-                    frictionAir: this.config.frictionAir,
-                    restitution: this.config.restitution,
-                    density: this.config.density,
-                    isStatic: this.config.isStatic,
-                    isSensor: isSensor,
-                    label: this.config.label
-                }
-            );
-        } else {
-            // Default to rectangle
-            this.body = Bodies.rectangle(
-                this.config.x,
-                this.config.y,
-                this.config.width,
-                this.config.height,
-                {
-                    render: { 
-                        fillStyle: this.config.color,
-                        strokeStyle: this.config.strokeColor,
-                        lineWidth: this.config.strokeWidth
-                    },
-                    friction: this.config.friction,
-                    frictionAir: this.config.frictionAir,
-                    restitution: this.config.restitution,
-                    density: this.config.density,
-                    isStatic: this.config.isStatic,
-                    isSensor: isSensor,
-                    label: this.config.label
-                }
-            );
+    // Get the merged config (defaults + provided)
+    this.config = this.entityConfig.get();
+
+    // Health properties
+    this.health = this.config.health;
+    this.maxHealth = this.config.maxHealth;
+    this.healthDisplay = this.config.healthDisplay;
+    this.isDestroyed = false;
+
+    // Determine if this is a sensor (no collisions)
+    const isSensor = this.config.collisions === "off";
+
+    // Create the physical body based on shape
+    if (this.config.shape === "circle") {
+      this.body = Bodies.circle(
+        this.config.x,
+        this.config.y,
+        this.config.radius,
+        {
+          render: {
+            fillStyle: this.config.color,
+            strokeStyle: this.config.strokeColor,
+            lineWidth: this.config.strokeWidth,
+          },
+          friction: this.config.friction,
+          frictionAir: this.config.frictionAir,
+          restitution: this.config.restitution,
+          density: this.config.density,
+          isStatic: this.config.isStatic,
+          isSensor: isSensor,
+          label: this.config.label,
         }
-
-        // Apply rotation if specified
-        if (this.config.rotation !== undefined && this.config.rotation !== 0) {
-            const { Body } = Matter;
-            Body.setAngle(this.body, this.config.rotation * Math.PI / 180);
+      );
+    } else if (this.config.shape === "triangle") {
+      // Create triangle using polygon with 3 sides
+      const width = this.config.width || 40;
+      const height = this.config.height || 40;
+      // Create vertices for an isosceles triangle pointing up (centered at origin)
+      const vertices = [
+        { x: 0, y: -height / 2 }, // top point
+        { x: -width / 2, y: height / 2 }, // bottom left
+        { x: width / 2, y: height / 2 }, // bottom right
+      ];
+      this.body = Bodies.fromVertices(
+        this.config.x,
+        this.config.y,
+        vertices,
+        {
+          render: {
+            fillStyle: this.config.color,
+            strokeStyle: this.config.strokeColor,
+            lineWidth: this.config.strokeWidth,
+          },
+          friction: this.config.friction,
+          frictionAir: this.config.frictionAir,
+          restitution: this.config.restitution,
+          density: this.config.density,
+          isStatic: this.config.isStatic,
+          isSensor: isSensor,
+          label: this.config.label,
+        },
+        true // flagInternal - auto-removes collinear points
+      );
+    } else {
+      // Default to rectangle
+      this.body = Bodies.rectangle(
+        this.config.x,
+        this.config.y,
+        this.config.width,
+        this.config.height,
+        {
+          render: {
+            fillStyle: this.config.color,
+            strokeStyle: this.config.strokeColor,
+            lineWidth: this.config.strokeWidth,
+          },
+          friction: this.config.friction,
+          frictionAir: this.config.frictionAir,
+          restitution: this.config.restitution,
+          density: this.config.density,
+          isStatic: this.config.isStatic,
+          isSensor: isSensor,
+          label: this.config.label,
         }
-
-        // Add to world
-        World.add(world, this.body);
+      );
     }
 
-    getPosition() {
-        return this.body.position;
+    // Apply rotation if specified
+    if (this.config.rotation !== undefined && this.config.rotation !== 0) {
+      const { Body } = Matter;
+      Body.setAngle(this.body, (this.config.rotation * Math.PI) / 180);
     }
 
-    takeDamage(amount) {
-        if (this.isDestroyed) return;
-        
-        this.health -= amount;
-        if (this.health < 0) {
-            this.health = 0;
-        }
+    // Add to world
+    World.add(world, this.body);
+  }
+
+  getPosition() {
+    return this.body.position;
+  }
+
+  takeDamage(amount) {
+    if (this.isDestroyed) return;
+
+    this.health -= amount;
+    if (this.health < 0) {
+      this.health = 0;
     }
+  }
 
-    heal(amount) {
-        if (this.isDestroyed) return;
-        
-        this.health += amount;
-        if (this.health > this.maxHealth) {
-            this.health = this.maxHealth;
-        }
+  heal(amount) {
+    if (this.isDestroyed) return;
+
+    this.health += amount;
+    if (this.health > this.maxHealth) {
+      this.health = this.maxHealth;
     }
+  }
 
-    destroy() {
-        if (this.isDestroyed) return;
-        
-        const { World } = Matter;
-        World.remove(this.world, this.body);
-        this.isDestroyed = true;
+  destroy() {
+    if (this.isDestroyed) return;
+
+    const { World } = Matter;
+    World.remove(this.world, this.body);
+    this.isDestroyed = true;
+  }
+
+  renderHealth(ctx, camera) {
+    if (this.isDestroyed || this.healthDisplay === "none") return;
+
+    const pos = this.body.position;
+
+    // Calculate screen position relative to camera (accounting for zoom)
+    const viewWidth = camera.width / camera.zoom;
+    const viewHeight = camera.height / camera.zoom;
+    const scale = camera.width / viewWidth;
+
+    // Convert world position to screen position
+    const screenX = (pos.x - camera.x) * scale + camera.width / 2;
+    const screenY = (pos.y - camera.y) * scale + camera.height / 2;
+
+    // Calculate offset that scales with the entity
+    const offsetY =
+      this.config.shape === "circle"
+        ? this.config.radius
+        : this.config.height / 2;
+    const spacing = 20; // World-space distance above entity
+    const scaledOffsetY = (offsetY + spacing) * scale;
+
+    if (this.healthDisplay === "bar") {
+      this.renderHealthBar(ctx, screenX, screenY - scaledOffsetY, scale);
+    } else if (this.healthDisplay === "text") {
+      this.renderHealthText(ctx, screenX, screenY - scaledOffsetY, scale);
     }
+  }
 
-    renderHealth(ctx, camera) {
-        if (this.isDestroyed || this.healthDisplay === 'none') return;
+  renderHealthBar(ctx, x, y, scale) {
+    // Scale the bar size with zoom to keep it proportional to objects
+    const barWidth = 50 * scale;
+    const barHeight = 6 * scale;
+    const healthPercent = this.health / this.maxHealth;
 
-        const pos = this.body.position;
-        
-        // Calculate screen position relative to camera (accounting for zoom)
-        const viewWidth = camera.width / camera.zoom;
-        const viewHeight = camera.height / camera.zoom;
-        const scale = camera.width / viewWidth;
-        
-        // Convert world position to screen position
-        const screenX = ((pos.x - camera.x) * scale) + camera.width / 2;
-        const screenY = ((pos.y - camera.y) * scale) + camera.height / 2;
+    // Background (red)
+    ctx.fillStyle = "#ff0000";
+    ctx.fillRect(x - barWidth / 2, y, barWidth, barHeight);
 
-        // Calculate offset that scales with the entity
-        const offsetY = (this.config.shape === 'circle' ? this.config.radius : this.config.height / 2);
-        const spacing = 20; // World-space distance above entity
-        const scaledOffsetY = (offsetY + spacing) * scale;
+    // Health (green)
+    ctx.fillStyle = "#00ff00";
+    ctx.fillRect(x - barWidth / 2, y, barWidth * healthPercent, barHeight);
 
-        if (this.healthDisplay === 'bar') {
-            this.renderHealthBar(ctx, screenX, screenY - scaledOffsetY, scale);
-        } else if (this.healthDisplay === 'text') {
-            this.renderHealthText(ctx, screenX, screenY - scaledOffsetY, scale);
-        }
+    // Border (scale line width too)
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = Math.max(1, scale);
+    ctx.strokeRect(x - barWidth / 2, y, barWidth, barHeight);
+  }
+
+  renderHealthText(ctx, x, y, scale) {
+    // Scale the font size with zoom to keep it proportional to objects
+    const fontSize = Math.max(8, 12 * scale); // Minimum 8px for readability
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `${fontSize}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${Math.round(this.health)}/${this.maxHealth}`, x, y);
+  }
+
+  renderDebugLabel(ctx, camera) {
+    if (this.isDestroyed) return;
+
+    const pos = this.body.position;
+
+    // Calculate screen position relative to camera (accounting for zoom)
+    const viewWidth = camera.width / camera.zoom;
+    const viewHeight = camera.height / camera.zoom;
+    const scale = camera.width / viewWidth;
+
+    // Convert world position to screen position
+    const screenX = (pos.x - camera.x) * scale + camera.width / 2;
+    const screenY = (pos.y - camera.y) * scale + camera.height / 2;
+
+    // Scale font size with zoom to keep it proportional to objects
+    const labelFontSize = Math.max(8, 10 * scale);
+    const collisionFontSize = Math.max(6, 8 * scale);
+
+    // Draw label centered on entity
+    ctx.fillStyle = "#ffff00";
+    ctx.font = `bold ${labelFontSize}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(this.config.label, screenX, screenY);
+
+    // Draw collision indicator
+    if (this.config.collisions === "off") {
+      ctx.fillStyle = "#ff00ff";
+      ctx.font = `${collisionFontSize}px Arial`;
+      ctx.fillText("[NO COLLISION]", screenX, screenY + 12 * scale);
     }
+  }
 
-    renderHealthBar(ctx, x, y, scale) {
-        // Scale the bar size with zoom to keep it proportional to objects
-        const barWidth = 50 * scale;
-        const barHeight = 6 * scale;
-        const healthPercent = this.health / this.maxHealth;
+  // EntityConfig helper methods
+  updateConfigProperty(key, value) {
+    this.entityConfig.updateProperty(key, value);
+    this.config = this.entityConfig.get();
+  }
 
-        // Background (red)
-        ctx.fillStyle = '#ff0000';
-        ctx.fillRect(x - barWidth / 2, y, barWidth, barHeight);
+  getConfigProperty(key) {
+    return this.entityConfig.getProperty(key);
+  }
 
-        // Health (green)
-        ctx.fillStyle = '#00ff00';
-        ctx.fillRect(x - barWidth / 2, y, barWidth * healthPercent, barHeight);
+  getEntityConfig() {
+    return this.entityConfig;
+  }
 
-        // Border (scale line width too)
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = Math.max(1, scale);
-        ctx.strokeRect(x - barWidth / 2, y, barWidth, barHeight);
-    }
-
-    renderHealthText(ctx, x, y, scale) {
-        // Scale the font size with zoom to keep it proportional to objects
-        const fontSize = Math.max(8, 12 * scale); // Minimum 8px for readability
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `${fontSize}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`${Math.round(this.health)}/${this.maxHealth}`, x, y);
-    }
-
-    renderDebugLabel(ctx, camera) {
-        if (this.isDestroyed) return;
-
-        const pos = this.body.position;
-        
-        // Calculate screen position relative to camera (accounting for zoom)
-        const viewWidth = camera.width / camera.zoom;
-        const viewHeight = camera.height / camera.zoom;
-        const scale = camera.width / viewWidth;
-        
-        // Convert world position to screen position
-        const screenX = ((pos.x - camera.x) * scale) + camera.width / 2;
-        const screenY = ((pos.y - camera.y) * scale) + camera.height / 2;
-
-        // Scale font size with zoom to keep it proportional to objects
-        const labelFontSize = Math.max(8, 10 * scale);
-        const collisionFontSize = Math.max(6, 8 * scale);
-
-        // Draw label centered on entity
-        ctx.fillStyle = '#ffff00';
-        ctx.font = `bold ${labelFontSize}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(this.config.label, screenX, screenY);
-
-        // Draw collision indicator
-        if (this.config.collisions === 'off') {
-            ctx.fillStyle = '#ff00ff';
-            ctx.font = `${collisionFontSize}px Arial`;
-            ctx.fillText('[NO COLLISION]', screenX, screenY + (12 * scale));
-        }
-    }
-
-    // EntityConfig helper methods
-    updateConfigProperty(key, value) {
-        this.entityConfig.updateProperty(key, value);
-        this.config = this.entityConfig.get();
-    }
-
-    getConfigProperty(key) {
-        return this.entityConfig.getProperty(key);
-    }
-
-    getEntityConfig() {
-        return this.entityConfig;
-    }
-
-    // Update method - can be overridden by subclasses
-    update(input) {
-        // Base entities don't have update logic
-        // This will be overridden by Player class
-    }
+  // Update method - can be overridden by subclasses
+  update(input) {
+    // Base entities don't have update logic
+    // This will be overridden by Player class
+  }
 }

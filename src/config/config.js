@@ -14,7 +14,7 @@ export class Config {
                 this.config = await response.json();
                 return this.config;
             } catch (error) {
-                console.error(`Error loading config from ${this.url}:`, error);
+                // Silently fall back to default config if URL not found
                 this.config = this.getDefaultConfig();
                 return this.config;
             }

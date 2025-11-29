@@ -1,67 +1,67 @@
-import { Entity } from './entity.js';
+import { Entity } from "./entity.js";
 
 export class Trigger extends Entity {
-    constructor(config, world) {
-        // Force sensor to be on for triggers
-        const triggerConfig = {
-            collisions: 'off', // Sensors don't have physical collisions
-            isStatic: true, // Triggers don't move
-            label: config.label || 'trigger',
-            color: config.color || '#00ffff33', // Semi-transparent cyan default
-            healthDisplay: 'none', // Triggers don't show health
-            ...config
-        };
+  constructor(config, world) {
+    // Force sensor to be on for triggers
+    const triggerConfig = {
+      collisions: "off", // Sensors don't have physical collisions
+      isStatic: true, // Triggers don't move
+      label: config.label || "trigger",
+      color: config.color || "#00ffff33", // Semi-transparent cyan default
+      healthDisplay: "none", // Triggers don't show health
+      ...config,
+    };
 
-        super(triggerConfig, world);
+    super(triggerConfig, world);
 
-        // Hide trigger rendering by default (will be shown when debug panel is open)
-        this.body.render.visible = false;
+    // Hide trigger rendering by default (will be shown when debug panel is open)
+    this.body.render.visible = false;
 
-        // Trigger-specific properties
-        this.triggerType = config.triggerType || 'generic'; // e.g., 'checkpoint', 'zone', 'damage'
-        this.onEnter = config.onEnter || null; // Callback function when entity enters
-        this.onExit = config.onExit || null; // Callback function when entity exits
-        this.onStay = config.onStay || null; // Callback function while entity is inside
-        this.triggerData = config.triggerData || {}; // Additional data for the trigger
-        
-        // Track entities currently inside the trigger
-        this.entitiesInside = new Set();
+    // Trigger-specific properties
+    this.triggerType = config.triggerType || "generic"; // e.g., 'checkpoint', 'zone', 'damage'
+    this.onEnter = config.onEnter || null; // Callback function when entity enters
+    this.onExit = config.onExit || null; // Callback function when entity exits
+    this.onStay = config.onStay || null; // Callback function while entity is inside
+    this.triggerData = config.triggerData || {}; // Additional data for the trigger
+
+    // Track entities currently inside the trigger
+    this.entitiesInside = new Set();
+  }
+
+  handleCollisionStart(otherBody) {
+    // Add to set of entities inside
+    this.entitiesInside.add(otherBody);
+
+    // Call onEnter callback if defined
+    if (this.onEnter && typeof this.onEnter === "function") {
+      this.onEnter(otherBody, this);
     }
+  }
 
-    handleCollisionStart(otherBody) {
-        // Add to set of entities inside
-        this.entitiesInside.add(otherBody);
-        
-        // Call onEnter callback if defined
-        if (this.onEnter && typeof this.onEnter === 'function') {
-            this.onEnter(otherBody, this);
-        }
-    }
+  handleCollisionEnd(otherBody) {
+    // Remove from set of entities inside
+    this.entitiesInside.delete(otherBody);
 
-    handleCollisionEnd(otherBody) {
-        // Remove from set of entities inside
-        this.entitiesInside.delete(otherBody);
-        
-        // Call onExit callback if defined
-        if (this.onExit && typeof this.onExit === 'function') {
-            this.onExit(otherBody, this);
-        }
+    // Call onExit callback if defined
+    if (this.onExit && typeof this.onExit === "function") {
+      this.onExit(otherBody, this);
     }
+  }
 
-    update() {
-        // Call onStay for all entities currently inside
-        if (this.onStay && typeof this.onStay === 'function') {
-            this.entitiesInside.forEach(body => {
-                this.onStay(body, this);
-            });
-        }
+  update() {
+    // Call onStay for all entities currently inside
+    if (this.onStay && typeof this.onStay === "function") {
+      this.entitiesInside.forEach((body) => {
+        this.onStay(body, this);
+      });
     }
+  }
 
-    isEntityInside(body) {
-        return this.entitiesInside.has(body);
-    }
+  isEntityInside(body) {
+    return this.entitiesInside.has(body);
+  }
 
-    clearEntities() {
-        this.entitiesInside.clear();
-    }
+  clearEntities() {
+    this.entitiesInside.clear();
+  }
 }
