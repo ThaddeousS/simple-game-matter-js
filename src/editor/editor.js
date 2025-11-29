@@ -1,6 +1,8 @@
 import { SelectTool } from "./tools/select-tool.js";
 import { EntityTool } from "./tools/entity-tool.js";
 import { DeleteTool } from "./tools/delete-tool.js";
+import { Entity } from "../game/entity/entity.js";
+import { Player } from "../game/entity/player/player.js";
 import Matter from "matter-js";
 
 export class Editor {
