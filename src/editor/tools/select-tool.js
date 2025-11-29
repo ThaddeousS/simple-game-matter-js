@@ -215,6 +215,9 @@ export class SelectTool extends Tool {
                 this.setTransformMode(this.transformMode);
                 foundEntity = true;
                 
+                // Update properties panel
+                this.editor.updatePropertiesPanel();
+                
                 // Let sub-tool handle the initial click
                 if (this.currentSubTool) {
                     this.currentSubTool.onMouseDown(e, worldPos);
@@ -227,6 +230,7 @@ export class SelectTool extends Tool {
         if (!foundEntity && !clickedWidget) {
             this.selectedEntity = null;
             this.currentSubTool = null;
+            this.editor.updatePropertiesPanel();
         }
     }
 

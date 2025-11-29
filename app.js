@@ -1,8 +1,9 @@
 import { Game } from './src/game/game.js';
 
 const init = () => {
-    window.addEventListener('load', () => {
+    window.addEventListener('load', async () => {
         const game = new Game();
+        await game.initialize();
 
         const infoHeader = document.getElementById('info-header');
         infoHeader.addEventListener('click', () => {

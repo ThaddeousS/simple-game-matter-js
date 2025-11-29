@@ -5,21 +5,55 @@ import { Player } from './entity/player/player.js';
 import { Entity } from './entity/entity.js';
 import { Trigger } from './entity/trigger.js';
 import { Editor } from '../editor/editor.js'
+import { GameConfig } from '../config/game-config.js';
+import { LevelConfig } from '../config/level-config.js';
 
 export class Game {
     constructor() {
         // Module aliases
-        const { Engine, Render, Runner, } = Matter;
+        const { Engine, Render, World, Bodies, Runner, Events } = Matter;
 
-        // Load game config, player config, and level data
-        this.gameConfig = this.getDefaultGameConfig();
-        this.playerConfig = this.getDefaultPlayerConfig();
-        this.levelData = this.getDefaultLevel();
+        // Initialize config instances
+        this.gameConfigInstance = new GameConfig('game-config.json');
+        this.levelConfigInstance = new LevelConfig('level1.json');
+        
+        // These will be populated after async load
+        this.gameConfig = null;
+        this.playerConfig = null;
+        this.levelData = null;
         
         // Initialize debug states separately
-        this.debugLabels = this.gameConfig.debug || false;
+        this.debugLabels = false;
         this.wireframes = false;
         this.inputDisabled = false;
+        
+        // Store Matter.js references
+        this.Engine = Engine;
+        this.Render = Render;
+        this.World = World;
+        this.Bodies = Bodies;
+        this.Runner = Runner;
+        this.Events = Events;
+        
+        // Engine, render, camera will be initialized after config loads
+        this.engine = null;
+        this.world = null;
+        this.render = null;
+        this.camera = null;
+        this.input = null;
+        this.player = null;
+        this.entities = [];
+        this.triggers = [];
+        this.runner = null;
+        this.editor = null;
+    }
+
+    async initialize() {
+        // Load configurations
+        await this.loadConfigurations();
+        
+        // Initialize debug state from config
+        this.debugLabels = this.gameConfig.debug || false;
         
         // Validate and set initial zoom from level config
         const configZoom = this.levelData.zoom !== undefined ? this.levelData.zoom : 1;
@@ -43,11 +77,11 @@ export class Game {
         const dimensions = this.calculateCanvasDimensions();
 
         // Create engine
-        this.engine = Engine.create();
+        this.engine = this.Engine.create();
         this.world = this.engine.world;
 
         // Create renderer
-        this.render = Render.create({
+        this.render = this.Render.create({
             element: document.body,
             engine: this.engine,
             options: {
@@ -86,9 +120,9 @@ export class Game {
         this.setupEvents();
 
         // Create and start the runner
-        this.runner = Runner.create();
-        Runner.run(this.runner, this.engine);
-        Render.run(this.render);
+        this.runner = this.Runner.create();
+        this.Runner.run(this.runner, this.engine);
+        this.Render.run(this.render);
 
         // Set up custom rendering for health displays
         this.setupCustomRendering();
@@ -325,6 +359,17 @@ export class Game {
         return zoom;
     }
 
+    async loadConfigurations() {
+        // Load game config
+        this.gameConfig = await this.gameConfigInstance.load();
+        
+        // Load level config
+        this.levelData = await this.levelConfigInstance.load();
+        
+        // Load player config (still uses old method for now)
+        this.playerConfig = this.getDefaultPlayerConfig();
+    }
+
     getDefaultGameConfig() {
         return {
             "aspectRatio": "16:9",
@@ -547,17 +592,17 @@ export class Game {
                 if (trigger.config.label === 'test_trigger') {
                     trigger.onEnter = (otherBody) => {
                         if (this.player && otherBody === this.player.body) {
-                            console.log('Player entered test_trigger');
+                            // Player entered trigger
                         }
                     };
                     trigger.onExit = (otherBody) => {
                         if (this.player && otherBody === this.player.body) {
-                            console.log('Player exited test_trigger');
+                            // Player exited trigger
                         }
                     };
                     trigger.onStay = (otherBody) => {
                         if (this.player && otherBody === this.player.body) {
-                            console.log('Player is inside test_trigger');
+                            // Player is inside trigger
                         }
                     };
                 }
@@ -763,6 +808,30 @@ export class Game {
         this.camera.setTarget(this.player.body);
         this.camera.x = 0;
         this.camera.y = 0;
+        this.hideGameOver();
+    }
+
+    async switchLevel(levelUrl = null) {
+        // Load new level configuration
+        this.levelData = await this.levelConfigInstance.switchLevel(levelUrl);
+        
+        // Validate and update zoom
+        const configZoom = this.levelData.zoom !== undefined ? this.levelData.zoom : 1;
+        const validatedZoom = this.validateZoom(configZoom);
+        if (validatedZoom !== configZoom) {
+            this.levelData.zoom = validatedZoom;
+        }
+        
+        // Reset the world with new level data
+        const { World } = Matter;
+        World.clear(this.world);
+        this.engine.world = this.world;
+        this.createWorld();
+        this.createPlayer();
+        this.camera.setTarget(this.player.body);
+        this.camera.x = 0;
+        this.camera.y = 0;
+        this.camera.setZoom(this.levelData.zoom);
         this.hideGameOver();
     }
 

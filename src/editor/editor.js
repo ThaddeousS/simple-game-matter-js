@@ -299,6 +299,286 @@ export class Editor {
         }
     }
 
+    updatePropertiesPanel() {
+        const propertiesDiv = document.getElementById('editor-properties');
+        if (!propertiesDiv) return;
+        
+        // Get selected entity from select tool
+        const selectedEntity = this.currentTool === this.tools.select ? this.tools.select.selectedEntity : null;
+        
+        if (!selectedEntity) {
+            propertiesDiv.innerHTML = '<p style="color: #aaa; font-size: 13px;">Select an object to edit properties</p>';
+            return;
+        }
+        
+        const entity = selectedEntity;
+        const config = entity.config;
+        
+        // Build properties form
+        let html = '<div style="display: flex; flex-direction: column; gap: 12px;">';
+        
+        // Label
+        html += this.createPropertyInput('Label', 'label', config.label, 'text');
+        
+        // Position
+        html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
+        html += '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Position</div>';
+        html += this.createPropertyInput('X', 'x', Math.round(entity.body.position.x), 'number');
+        html += this.createPropertyInput('Y', 'y', Math.round(entity.body.position.y), 'number');
+        html += '</div>';
+        
+        // Size/Dimensions
+        html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
+        html += '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Size</div>';
+        if (config.shape === 'circle') {
+            html += this.createPropertyInput('Radius', 'radius', Math.round(config.radius), 'number');
+        } else {
+            html += this.createPropertyInput('Width', 'width', Math.round(config.width), 'number');
+            html += this.createPropertyInput('Height', 'height', Math.round(config.height), 'number');
+        }
+        html += '</div>';
+        
+        // Rotation
+        html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
+        html += '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Rotation</div>';
+        const degrees = Math.round((entity.body.angle * 180 / Math.PI) % 360);
+        html += this.createPropertyInput('Angle (°)', 'angle', degrees, 'number');
+        html += '</div>';
+        
+        // Visual
+        html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
+        html += '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Visual</div>';
+        html += this.createPropertyInput('Color', 'color', config.color, 'color');
+        html += this.createPropertyInput('Shape', 'shape', config.shape || 'rectangle', 'select', ['rectangle', 'circle']);
+        html += '</div>';
+        
+        // Physics
+        html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
+        html += '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Physics</div>';
+        html += this.createPropertyInput('Static', 'isStatic', entity.body.isStatic, 'checkbox');
+        html += this.createPropertyInput('Friction', 'friction', config.friction !== undefined ? config.friction : 0.1, 'number', 0.01, 0, 1);
+        html += this.createPropertyInput('Restitution', 'restitution', config.restitution !== undefined ? config.restitution : 0, 'number', 0.01, 0, 1);
+        html += this.createPropertyInput('Density', 'density', config.density !== undefined ? config.density : 0.001, 'number', 0.001, 0, 1);
+        html += '</div>';
+        
+        // Collision
+        html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
+        html += '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Collision</div>';
+        html += this.createPropertyInput('Collisions', 'collisions', config.collisions || 'default', 'select', ['default', 'off']);
+        html += '</div>';
+        
+        // Health
+        html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
+        html += '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Health</div>';
+        html += this.createPropertyInput('Health', 'health', config.health !== undefined ? config.health : 100, 'number');
+        html += this.createPropertyInput('Max Health', 'maxHealth', config.maxHealth !== undefined ? config.maxHealth : 100, 'number');
+        html += this.createPropertyInput('Display', 'healthDisplay', config.healthDisplay || 'none', 'select', ['none', 'bar', 'text']);
+        html += '</div>';
+        
+        html += '</div>';
+        
+        propertiesDiv.innerHTML = html;
+        
+        // Add event listeners to all inputs
+        this.attachPropertyListeners(selectedEntity);
+    }
+
+    createPropertyInput(label, property, value, type, step = 1, min = null, max = null, options = []) {
+        const inputId = `prop-${property}`;
+        let inputHtml = '';
+        
+        if (type === 'checkbox') {
+            inputHtml = `
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                    <label style="color: white; font-size: 12px;">${label}</label>
+                    <input type="checkbox" id="${inputId}" ${value ? 'checked' : ''} 
+                        style="width: 18px; height: 18px; cursor: pointer;">
+                </div>
+            `;
+        } else if (type === 'color') {
+            inputHtml = `
+                <div style="margin-bottom: 6px;">
+                    <label style="color: white; font-size: 12px; display: block; margin-bottom: 3px;">${label}</label>
+                    <input type="color" id="${inputId}" value="${value}" 
+                        style="width: 100%; height: 30px; cursor: pointer; border: 1px solid #555; background: transparent;">
+                </div>
+            `;
+        } else if (type === 'select') {
+            inputHtml = `
+                <div style="margin-bottom: 6px;">
+                    <label style="color: white; font-size: 12px; display: block; margin-bottom: 3px;">${label}</label>
+                    <select id="${inputId}" 
+                        style="width: 100%; padding: 6px; background: #2c3e50; color: white; border: 1px solid #555; border-radius: 3px; font-size: 12px;">
+                        ${options.map(opt => `<option value="${opt}" ${opt === value ? 'selected' : ''}>${opt}</option>`).join('')}
+                    </select>
+                </div>
+            `;
+        } else {
+            const minAttr = min !== null ? `min="${min}"` : '';
+            const maxAttr = max !== null ? `max="${max}"` : '';
+            const stepAttr = `step="${step}"`;
+            inputHtml = `
+                <div style="margin-bottom: 6px;">
+                    <label style="color: white; font-size: 12px; display: block; margin-bottom: 3px;">${label}</label>
+                    <input type="${type}" id="${inputId}" value="${value}" ${minAttr} ${maxAttr} ${stepAttr}
+                        style="width: 100%; padding: 6px; background: #2c3e50; color: white; border: 1px solid #555; border-radius: 3px; font-size: 12px;">
+                </div>
+            `;
+        }
+        
+        return inputHtml;
+    }
+
+    attachPropertyListeners(entity) {
+        const { Body } = Matter;
+        
+        // Label
+        const labelInput = document.getElementById('prop-label');
+        if (labelInput) {
+            labelInput.addEventListener('input', (e) => {
+                entity.config.label = e.target.value;
+            });
+        }
+        
+        // Position
+        const xInput = document.getElementById('prop-x');
+        const yInput = document.getElementById('prop-y');
+        if (xInput && yInput) {
+            xInput.addEventListener('input', (e) => {
+                Body.setPosition(entity.body, { x: parseFloat(e.target.value), y: entity.body.position.y });
+            });
+            yInput.addEventListener('input', (e) => {
+                Body.setPosition(entity.body, { x: entity.body.position.x, y: parseFloat(e.target.value) });
+            });
+        }
+        
+        // Size
+        if (entity.config.shape === 'circle') {
+            const radiusInput = document.getElementById('prop-radius');
+            if (radiusInput) {
+                radiusInput.addEventListener('input', (e) => {
+                    const newRadius = parseFloat(e.target.value);
+                    Body.scale(entity.body, newRadius / entity.config.radius, newRadius / entity.config.radius);
+                    entity.config.radius = newRadius;
+                    this.updatePropertiesPanel();
+                });
+            }
+        } else {
+            const widthInput = document.getElementById('prop-width');
+            const heightInput = document.getElementById('prop-height');
+            if (widthInput) {
+                widthInput.addEventListener('input', (e) => {
+                    const newWidth = parseFloat(e.target.value);
+                    Body.scale(entity.body, newWidth / entity.config.width, 1);
+                    entity.config.width = newWidth;
+                    this.updatePropertiesPanel();
+                });
+            }
+            if (heightInput) {
+                heightInput.addEventListener('input', (e) => {
+                    const newHeight = parseFloat(e.target.value);
+                    Body.scale(entity.body, 1, newHeight / entity.config.height);
+                    entity.config.height = newHeight;
+                    this.updatePropertiesPanel();
+                });
+            }
+        }
+        
+        // Rotation
+        const angleInput = document.getElementById('prop-angle');
+        if (angleInput) {
+            angleInput.addEventListener('input', (e) => {
+                const degrees = parseFloat(e.target.value);
+                Body.setAngle(entity.body, degrees * Math.PI / 180);
+                this.updatePropertiesPanel();
+            });
+        }
+        
+        // Color
+        const colorInput = document.getElementById('prop-color');
+        if (colorInput) {
+            colorInput.addEventListener('input', (e) => {
+                entity.config.color = e.target.value;
+                entity.body.render.fillStyle = e.target.value;
+            });
+        }
+        
+        // Shape (would require recreation)
+        const shapeInput = document.getElementById('prop-shape');
+        if (shapeInput) {
+            shapeInput.addEventListener('change', (e) => {
+                // Shape changes require entity recreation - not implemented yet
+                alert('Shape changes require recreation - not yet implemented');
+            });
+        }
+        
+        // Physics
+        const staticInput = document.getElementById('prop-isStatic');
+        if (staticInput) {
+            staticInput.addEventListener('change', (e) => {
+                Body.setStatic(entity.body, e.target.checked);
+            });
+        }
+        
+        const frictionInput = document.getElementById('prop-friction');
+        if (frictionInput) {
+            frictionInput.addEventListener('input', (e) => {
+                entity.config.friction = parseFloat(e.target.value);
+                entity.body.friction = parseFloat(e.target.value);
+            });
+        }
+        
+        const restitutionInput = document.getElementById('prop-restitution');
+        if (restitutionInput) {
+            restitutionInput.addEventListener('input', (e) => {
+                entity.config.restitution = parseFloat(e.target.value);
+                entity.body.restitution = parseFloat(e.target.value);
+            });
+        }
+        
+        const densityInput = document.getElementById('prop-density');
+        if (densityInput) {
+            densityInput.addEventListener('input', (e) => {
+                entity.config.density = parseFloat(e.target.value);
+                Body.setDensity(entity.body, parseFloat(e.target.value));
+            });
+        }
+        
+        // Collision
+        const collisionsInput = document.getElementById('prop-collisions');
+        if (collisionsInput) {
+            collisionsInput.addEventListener('change', (e) => {
+                entity.config.collisions = e.target.value;
+                entity.body.collisionFilter.group = e.target.value === 'off' ? -1 : 0;
+            });
+        }
+        
+        // Health
+        const healthInput = document.getElementById('prop-health');
+        if (healthInput) {
+            healthInput.addEventListener('input', (e) => {
+                entity.config.health = parseFloat(e.target.value);
+                entity.health = parseFloat(e.target.value);
+            });
+        }
+        
+        const maxHealthInput = document.getElementById('prop-maxHealth');
+        if (maxHealthInput) {
+            maxHealthInput.addEventListener('input', (e) => {
+                entity.config.maxHealth = parseFloat(e.target.value);
+                entity.maxHealth = parseFloat(e.target.value);
+            });
+        }
+        
+        const healthDisplayInput = document.getElementById('prop-healthDisplay');
+        if (healthDisplayInput) {
+            healthDisplayInput.addEventListener('change', (e) => {
+                entity.config.healthDisplay = e.target.value;
+                entity.healthDisplay = e.target.value;
+            });
+        }
+    }
+
     toggle() {
         this.isActive = !this.isActive;
         this.editorContainer.style.display = this.isActive ? 'block' : 'none';

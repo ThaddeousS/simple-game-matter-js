@@ -45,6 +45,10 @@ export class MoveTool extends TransformTool {
 
     onMouseUp(e, worldPos) {
         this.isDragging = false;
+        // Update properties panel after move
+        if (this.editor && this.editor.updatePropertiesPanel) {
+            this.editor.updatePropertiesPanel();
+        }
     }
 
     getWidgetInteraction(worldPos) {

@@ -99,6 +99,10 @@ export class ScaleTool extends TransformTool {
             }
         }
         this.isDragging = false;
+        // Update properties panel after scaling
+        if (this.editor && this.editor.updatePropertiesPanel) {
+            this.editor.updatePropertiesPanel();
+        }
     }
 
     getScaleHandle(worldPos) {

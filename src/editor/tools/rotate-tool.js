@@ -36,6 +36,10 @@ export class RotateTool extends TransformTool {
 
     onMouseUp(e, worldPos) {
         this.isDragging = false;
+        // Update properties panel after rotation
+        if (this.editor && this.editor.updatePropertiesPanel) {
+            this.editor.updatePropertiesPanel();
+        }
     }
 
     renderWidget(ctx, camera) {

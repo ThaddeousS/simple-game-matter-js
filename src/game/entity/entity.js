@@ -15,12 +15,14 @@ export class Entity {
             height: config.height || 40,
             shape: config.shape || 'rectangle', // 'rectangle' or 'circle'
             radius: config.radius || 20, // For circle shapes
+            rotation: config.rotation !== undefined ? config.rotation : 0,
             color: config.color || '#ffffff',
             strokeColor: config.strokeColor || null,
             strokeWidth: config.strokeWidth || 0,
-            friction: config.friction || 0.3,
-            frictionAir: config.frictionAir || 0.01,
-            density: config.density || 0.001,
+            friction: config.friction !== undefined ? config.friction : 0.3,
+            frictionAir: config.frictionAir !== undefined ? config.frictionAir : 0.01,
+            restitution: config.restitution !== undefined ? config.restitution : 0,
+            density: config.density !== undefined ? config.density : 0.001,
             isStatic: config.isStatic || config.static || false, // Support both isStatic and static
             label: config.label || 'entity',
             health: config.health !== undefined ? config.health : 100,
@@ -52,6 +54,7 @@ export class Entity {
                     },
                     friction: this.config.friction,
                     frictionAir: this.config.frictionAir,
+                    restitution: this.config.restitution,
                     density: this.config.density,
                     isStatic: this.config.isStatic,
                     isSensor: isSensor,
@@ -73,12 +76,19 @@ export class Entity {
                     },
                     friction: this.config.friction,
                     frictionAir: this.config.frictionAir,
+                    restitution: this.config.restitution,
                     density: this.config.density,
                     isStatic: this.config.isStatic,
                     isSensor: isSensor,
                     label: this.config.label
                 }
             );
+        }
+
+        // Apply rotation if specified
+        if (this.config.rotation !== undefined && this.config.rotation !== 0) {
+            const { Body } = Matter;
+            Body.setAngle(this.body, this.config.rotation * Math.PI / 180);
         }
 
         // Add to world
@@ -124,8 +134,10 @@ export class Entity {
         const viewWidth = camera.width / camera.zoom;
         const viewHeight = camera.height / camera.zoom;
         const scale = camera.width / viewWidth;
-        const screenX = ((pos.x - camera.x) / viewWidth) * camera.width + camera.width / 2;
-        const screenY = ((pos.y - camera.y) / viewHeight) * camera.height + camera.height / 2;
+        
+        // Convert world position to screen position
+        const screenX = ((pos.x - camera.x) * scale) + camera.width / 2;
+        const screenY = ((pos.y - camera.y) * scale) + camera.height / 2;
 
         // Calculate offset that scales with the entity
         const offsetY = (this.config.shape === 'circle' ? this.config.radius : this.config.height / 2);
@@ -178,11 +190,13 @@ export class Entity {
         // Calculate screen position relative to camera (accounting for zoom)
         const viewWidth = camera.width / camera.zoom;
         const viewHeight = camera.height / camera.zoom;
-        const screenX = ((pos.x - camera.x) / viewWidth) * camera.width + camera.width / 2;
-        const screenY = ((pos.y - camera.y) / viewHeight) * camera.height + camera.height / 2;
+        const scale = camera.width / viewWidth;
+        
+        // Convert world position to screen position
+        const screenX = ((pos.x - camera.x) * scale) + camera.width / 2;
+        const screenY = ((pos.y - camera.y) * scale) + camera.height / 2;
 
         // Scale font size with zoom to keep it proportional to objects
-        const scale = camera.width / viewWidth;
         const labelFontSize = Math.max(8, 10 * scale);
         const collisionFontSize = Math.max(6, 8 * scale);
 
