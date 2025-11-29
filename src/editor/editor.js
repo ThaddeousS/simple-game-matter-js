@@ -29,6 +29,9 @@ export class Editor {
         // Initial game state for reset
         this.initialGameState = null;
         
+        // Track entities that have been manually deleted (to not recreate on reset)
+        this.deletedEntityIds = new Set();
+        
         // Initialize tools
         this.tools = {
             select: new SelectTool(this),
@@ -592,7 +595,8 @@ export class Editor {
         const canvas = this.game.render.canvas;
         
         if (this.isActive) {
-            // Entering editor mode
+            // Entering editor mode - auto reset to initial state
+            this.resetToInitialState();
             this.game.pauseSimulation();
             canvas.style.cursor = 'grab';
         } else {
@@ -673,6 +677,22 @@ export class Editor {
     setupToolListeners() {
         const canvas = this.game.render.canvas;
         
+        // Setup save button
+        const saveBtn = document.getElementById('editor-save-btn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                this.showSaveDialog();
+            });
+        }
+        
+        // Setup load button
+        const loadBtn = document.getElementById('editor-load-btn');
+        if (loadBtn) {
+            loadBtn.addEventListener('click', () => {
+                this.showLoadDialog();
+            });
+        }
+        
         // Prevent default context menu when in editor mode
         canvas.addEventListener('contextmenu', (e) => {
             if (this.isActive) {
@@ -743,13 +763,19 @@ export class Editor {
             playerHealth: this.game.player.health,
             cameraPosition: { x: this.game.camera.x, y: this.game.camera.y },
             cameraZoom: this.game.camera.zoom,
+            // Store complete entity data including configs for recreation
             entities: this.game.entities.map(entity => ({
+                // Physical state
                 position: { ...entity.body.position },
                 velocity: { ...entity.body.velocity },
                 angle: entity.body.angle,
                 angularVelocity: entity.body.angularVelocity,
                 health: entity.health,
-                isDestroyed: entity.isDestroyed
+                isDestroyed: entity.isDestroyed,
+                // Complete config for recreation
+                config: entity.getEntityConfig().get(),
+                // Reference to original entity for matching
+                bodyId: entity.body.id
             })),
             triggers: this.game.triggers.map(trigger => ({
                 entitiesInside: new Set(trigger.entitiesInside)
@@ -764,7 +790,7 @@ export class Editor {
             return;
         }
         
-        const { Body } = Matter;
+        const { Body, World } = Matter;
         
         // Restore player state
         Body.setPosition(this.game.player.body, this.initialGameState.playerPosition);
@@ -776,7 +802,6 @@ export class Editor {
         // If player was destroyed, restore it
         if (this.game.player.isDestroyed) {
             this.game.player.isDestroyed = false;
-            const { World } = Matter;
             World.add(this.game.world, this.game.player.body);
         }
         
@@ -785,18 +810,80 @@ export class Editor {
         this.game.camera.y = this.initialGameState.cameraPosition.y;
         this.game.camera.zoom = this.initialGameState.cameraZoom;
         
-        // Restore entities
-        this.game.entities.forEach((entity, index) => {
-            if (this.initialGameState.entities[index]) {
-                const savedEntity = this.initialGameState.entities[index];
-                Body.setPosition(entity.body, savedEntity.position);
-                Body.setVelocity(entity.body, savedEntity.velocity);
-                Body.setAngle(entity.body, savedEntity.angle);
-                Body.setAngularVelocity(entity.body, savedEntity.angularVelocity);
-                entity.health = savedEntity.health;
-                entity.isDestroyed = savedEntity.isDestroyed;
+        // Build a map of current entities by body ID
+        const currentEntitiesMap = new Map();
+        this.game.entities.forEach(entity => {
+            currentEntitiesMap.set(entity.body.id, entity);
+        });
+        
+        // Build a map of initial entities by body ID
+        const initialEntitiesMap = new Map();
+        this.initialGameState.entities.forEach(savedEntity => {
+            initialEntitiesMap.set(savedEntity.bodyId, savedEntity);
+        });
+        
+        // Find entities to remove (exist now but didn't exist initially)
+        const entitiesToRemove = [];
+        this.game.entities.forEach(entity => {
+            if (!initialEntitiesMap.has(entity.body.id)) {
+                entitiesToRemove.push(entity);
             }
         });
+        
+        // Remove entities that were created during edit mode
+        entitiesToRemove.forEach(entity => {
+            entity.destroy();
+            const index = this.game.entities.indexOf(entity);
+            if (index > -1) {
+                this.game.entities.splice(index, 1);
+            }
+        });
+        
+        // Restore or recreate entities that existed initially
+        const restoredEntities = [];
+        this.initialGameState.entities.forEach(savedEntity => {
+            // Skip entities that were manually deleted
+            if (this.deletedEntityIds.has(savedEntity.bodyId)) {
+                return;
+            }
+            
+            const currentEntity = currentEntitiesMap.get(savedEntity.bodyId);
+            
+            if (currentEntity) {
+                // Entity still exists, restore its state
+                Body.setPosition(currentEntity.body, savedEntity.position);
+                Body.setVelocity(currentEntity.body, savedEntity.velocity);
+                Body.setAngle(currentEntity.body, savedEntity.angle);
+                Body.setAngularVelocity(currentEntity.body, savedEntity.angularVelocity);
+                currentEntity.health = savedEntity.health;
+                currentEntity.isDestroyed = savedEntity.isDestroyed;
+                
+                // If entity was destroyed, restore it to the world
+                if (savedEntity.isDestroyed === false && currentEntity.isDestroyed) {
+                    currentEntity.isDestroyed = false;
+                    World.add(this.game.world, currentEntity.body);
+                }
+                
+                restoredEntities.push(currentEntity);
+            } else {
+                // Entity was deleted but NOT manually (e.g., destroyed by game logic)
+                // Recreate it from saved config
+                const recreatedEntity = new Entity(savedEntity.config, this.game.world);
+                
+                // Set the physical state to match saved state
+                Body.setPosition(recreatedEntity.body, savedEntity.position);
+                Body.setVelocity(recreatedEntity.body, savedEntity.velocity);
+                Body.setAngle(recreatedEntity.body, savedEntity.angle);
+                Body.setAngularVelocity(recreatedEntity.body, savedEntity.angularVelocity);
+                recreatedEntity.health = savedEntity.health;
+                recreatedEntity.isDestroyed = savedEntity.isDestroyed;
+                
+                restoredEntities.push(recreatedEntity);
+            }
+        });
+        
+        // Replace entities array with restored entities
+        this.game.entities = restoredEntities;
         
         // Restore triggers
         this.game.triggers.forEach((trigger, index) => {
@@ -807,5 +894,323 @@ export class Editor {
         
         // Hide game over dialog if visible
         this.game.hideGameOver();
+        
+        // Clear any selection
+        if (this.tools.select) {
+            this.tools.select.selectedEntity = null;
+        }
+        
+        // Update properties panel
+        this.updatePropertiesPanel();
+    }
+
+    showSaveDialog() {
+        // Create a modal dialog for save options
+        const dialog = document.createElement('div');
+        dialog.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30, 30, 30, 0.98);
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            padding: 20px;
+            z-index: 10000;
+            min-width: 300px;
+        `;
+        
+        dialog.innerHTML = `
+            <h3 style="margin-top: 0; color: #3498db;">Save Level</h3>
+            <p style="color: #aaa; font-size: 14px;">Choose what to save:</p>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin: 20px 0;">
+                <button id="save-level-btn" style="padding: 10px; background: #2ecc71; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    Save Level Config
+                </button>
+                <button id="save-game-btn" style="padding: 10px; background: #9b59b6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    Save Game Config
+                </button>
+            </div>
+            <button id="cancel-save-btn" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; width: 100%;">
+                Cancel
+            </button>
+        `;
+        
+        document.body.appendChild(dialog);
+        
+        // Event listeners
+        document.getElementById('save-level-btn').addEventListener('click', () => {
+            document.body.removeChild(dialog);
+            this.exportLevelConfig();
+        });
+        
+        document.getElementById('save-game-btn').addEventListener('click', () => {
+            document.body.removeChild(dialog);
+            this.exportGameConfig();
+        });
+        
+        document.getElementById('cancel-save-btn').addEventListener('click', () => {
+            document.body.removeChild(dialog);
+        });
+    }
+
+    showLoadDialog() {
+        // Create a modal dialog for load options
+        const dialog = document.createElement('div');
+        dialog.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30, 30, 30, 0.98);
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            padding: 20px;
+            z-index: 10000;
+            min-width: 300px;
+        `;
+        
+        dialog.innerHTML = `
+            <h3 style="margin-top: 0; color: #3498db;">Load Config</h3>
+            <p style="color: #aaa; font-size: 14px;">Choose what to load:</p>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin: 20px 0;">
+                <button id="load-level-btn" style="padding: 10px; background: #2ecc71; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    Load Level Config
+                </button>
+                <button id="load-game-btn" style="padding: 10px; background: #9b59b6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    Load Game Config
+                </button>
+            </div>
+            <button id="cancel-load-btn" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; width: 100%;">
+                Cancel
+            </button>
+        `;
+        
+        document.body.appendChild(dialog);
+        
+        // Create hidden file inputs
+        const levelFileInput = document.createElement('input');
+        levelFileInput.type = 'file';
+        levelFileInput.accept = '.json';
+        levelFileInput.style.display = 'none';
+        document.body.appendChild(levelFileInput);
+        
+        const gameFileInput = document.createElement('input');
+        gameFileInput.type = 'file';
+        gameFileInput.accept = '.json';
+        gameFileInput.style.display = 'none';
+        document.body.appendChild(gameFileInput);
+        
+        // Event listeners
+        document.getElementById('load-level-btn').addEventListener('click', () => {
+            document.body.removeChild(dialog);
+            levelFileInput.click();
+        });
+        
+        document.getElementById('load-game-btn').addEventListener('click', () => {
+            document.body.removeChild(dialog);
+            gameFileInput.click();
+        });
+        
+        document.getElementById('cancel-load-btn').addEventListener('click', () => {
+            document.body.removeChild(dialog);
+            document.body.removeChild(levelFileInput);
+            document.body.removeChild(gameFileInput);
+        });
+        
+        // File input handlers
+        levelFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                await this.loadLevelConfigFromFile(file);
+            }
+            document.body.removeChild(levelFileInput);
+            document.body.removeChild(gameFileInput);
+        });
+        
+        gameFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                await this.loadGameConfigFromFile(file);
+            }
+            document.body.removeChild(levelFileInput);
+            document.body.removeChild(gameFileInput);
+        });
+    }
+
+    async loadLevelConfigFromFile(file) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const levelConfig = JSON.parse(e.target.result);
+                
+                // Update the level config instance
+                this.game.levelConfigInstance.set(levelConfig);
+                this.game.levelData = levelConfig;
+                
+                // Validate and update zoom
+                const configZoom = levelConfig.zoom !== undefined ? levelConfig.zoom : 1;
+                const validatedZoom = this.game.validateZoom(configZoom);
+                if (validatedZoom !== configZoom) {
+                    this.game.levelData.zoom = validatedZoom;
+                }
+                
+                // Reset the world with new level data
+                const { World } = Matter;
+                World.clear(this.game.world);
+                this.game.engine.world = this.game.world;
+                this.game.createWorld();
+                this.game.createPlayer();
+                this.game.camera.setTarget(this.game.player.body);
+                this.game.camera.x = 0;
+                this.game.camera.y = 0;
+                this.game.camera.setZoom(this.game.levelData.zoom);
+                this.game.hideGameOver();
+                
+                // Clear deletion tracking for new level
+                this.deletedEntityIds.clear();
+                
+                // Update editor state
+                this.saveInitialState();
+                this.updatePropertiesPanel();
+                
+                alert('Level config loaded successfully!');
+            } catch (error) {
+                console.error('Error loading level config:', error);
+                alert('Error loading level config: ' + error.message);
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    async loadGameConfigFromFile(file) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const gameConfig = JSON.parse(e.target.result);
+                
+                // Update the game config
+                this.game.gameConfigInstance.set(gameConfig);
+                this.game.gameConfig = gameConfig;
+                
+                // Apply aspect ratio if changed
+                if (gameConfig.aspectRatio) {
+                    try {
+                        this.game.aspectRatio = this.game.parseAspectRatio(gameConfig.aspectRatio);
+                        const dimensions = this.game.calculateCanvasDimensions();
+                        this.game.render.canvas.width = dimensions.width;
+                        this.game.render.canvas.height = dimensions.height;
+                        this.game.camera.width = dimensions.width;
+                        this.game.camera.height = dimensions.height;
+                        this.game.render.options.width = dimensions.width;
+                        this.game.render.options.height = dimensions.height;
+                    } catch (error) {
+                        console.error('Error applying aspect ratio:', error);
+                    }
+                }
+                
+                // Apply debug mode
+                if (gameConfig.debug !== undefined) {
+                    this.game.debugLabels = gameConfig.debug;
+                }
+                
+                alert('Game config loaded successfully!');
+            } catch (error) {
+                console.error('Error loading game config:', error);
+                alert('Error loading game config: ' + error.message);
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    exportLevelConfig() {
+        try {
+            // Build level config from current game state
+            const levelConfig = {
+                worldSize: this.game.levelData.worldSize || 3000,
+                wallThickness: this.game.levelData.wallThickness || 50,
+                zoom: this.game.camera.zoom,
+                boundaries: {
+                    enabled: this.game.levelData.boundaries?.enabled !== false
+                },
+                overrides: {
+                    player: {
+                        x: Math.round(this.game.player.body.position.x),
+                        y: Math.round(this.game.player.body.position.y)
+                    }
+                },
+                entities: this.game.entities.map(entity => {
+                    const config = entity.getEntityConfig().get();
+                    return {
+                        x: Math.round(entity.body.position.x),
+                        y: Math.round(entity.body.position.y),
+                        width: config.width,
+                        height: config.height,
+                        shape: config.shape,
+                        radius: config.radius,
+                        rotation: Math.round((entity.body.angle * 180 / Math.PI) % 360),
+                        color: config.color,
+                        strokeColor: config.strokeColor,
+                        strokeWidth: config.strokeWidth,
+                        friction: config.friction,
+                        frictionAir: config.frictionAir,
+                        restitution: config.restitution,
+                        density: config.density,
+                        isStatic: entity.body.isStatic,
+                        health: config.health,
+                        maxHealth: config.maxHealth,
+                        healthDisplay: config.healthDisplay,
+                        label: config.label
+                    };
+                }),
+                triggers: this.game.triggers.map(trigger => {
+                    const config = trigger.config;
+                    return {
+                        x: Math.round(trigger.body.position.x),
+                        y: Math.round(trigger.body.position.y),
+                        width: config.width,
+                        height: config.height,
+                        rotation: Math.round((trigger.body.angle * 180 / Math.PI) % 360),
+                        label: config.label,
+                        triggerType: trigger.triggerType,
+                        color: config.color
+                    };
+                })
+            };
+            
+            this.downloadJSON(levelConfig, 'level.json');
+        } catch (error) {
+            console.error('Error in exportLevelConfig:', error);
+            throw error;
+        }
+    }
+
+    exportGameConfig() {
+        try {
+            // Get current game config
+            const gameConfig = this.game.gameConfig;
+            this.downloadJSON(gameConfig, 'game-config.json');
+        } catch (error) {
+            console.error('Error in exportGameConfig:', error);
+            throw error;
+        }
+    }
+
+    downloadJSON(data, filename) {
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Defer cleanup to ensure download completes
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
     }
 }

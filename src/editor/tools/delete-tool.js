@@ -20,10 +20,20 @@ export class DeleteTool extends Tool {
         for (let i = entities.length - 1; i >= 0; i--) {
             const entity = entities[i];
             if (this.isPointInEntity(worldPos, entity)) {
+                // Track this entity as manually deleted
+                this.editor.deletedEntityIds.add(entity.body.id);
+                
                 entity.destroy();
                 this.editor.game.entities.splice(i, 1);
+                
+                // Don't save initial state - let deleted entities stay deleted on reset
                 return;
             }
+        }
+        
+        // Check if clicking on player
+        if (this.editor.game.player && this.isPointInEntity(worldPos, this.editor.game.player)) {
+            alert('Cannot delete player directly. Player is managed separately.');
         }
     }
 

@@ -212,8 +212,9 @@ export class Entity {
         return this.entityConfig;
     }
 
-    // Empty update method to be overridden by subclasses
+    // Update method - can be overridden by subclasses
     update(input) {
-        // Override in subclasses
+        // Base entities don't have update logic
+        // This will be overridden by Player class
     }
 }

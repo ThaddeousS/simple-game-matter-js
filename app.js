@@ -1,8 +1,10 @@
 import { Game } from './src/game/game.js';
 
 const init = () => {
+    let game = undefined;
+
     window.addEventListener('load', async () => {
-        const game = new Game();
+        game = new Game();
         await game.initialize();
 
         const infoHeader = document.getElementById('info-header');

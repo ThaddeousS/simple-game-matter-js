@@ -106,15 +106,13 @@ export class Game {
         this.input.bindAction('moveRight', ['ArrowRight', 'd', 'D']);
         this.input.bindAction('jump', ['ArrowUp', 'w', 'W', ' ']);
 
-        // Create world with loaded level data
+        // Create world with loaded level data (this also finds the player)
         this.createWorld();
 
-        // Create player using Player class
-        this.player = null;
-        this.createPlayer();
-
         // Set camera to follow player
-        this.camera.setTarget(this.player.body);
+        if (this.player) {
+            this.camera.setTarget(this.player.body);
+        }
 
         // Setup event listeners
         this.setupEvents();
@@ -613,10 +611,13 @@ export class Game {
 
         // Add boundary bodies to the world (entities are already added in their constructor)
         World.add(this.world, bodies);
+        
+        // Create the player
+        this.createPlayer();
     }
 
     createPlayer() {
-        // Start with base player config
+        // Create player with config
         let playerConfig = { ...this.playerConfig };
         
         // Apply level-specific overrides if they exist
