@@ -436,7 +436,7 @@ export class Editor {
         const labelInput = document.getElementById('prop-label');
         if (labelInput) {
             labelInput.addEventListener('input', (e) => {
-                entity.config.label = e.target.value;
+                entity.updateConfigProperty('label', e.target.value);
             });
         }
         
@@ -459,7 +459,7 @@ export class Editor {
                 radiusInput.addEventListener('input', (e) => {
                     const newRadius = parseFloat(e.target.value);
                     Body.scale(entity.body, newRadius / entity.config.radius, newRadius / entity.config.radius);
-                    entity.config.radius = newRadius;
+                    entity.updateConfigProperty('radius', newRadius);
                     this.updatePropertiesPanel();
                 });
             }
@@ -470,7 +470,7 @@ export class Editor {
                 widthInput.addEventListener('input', (e) => {
                     const newWidth = parseFloat(e.target.value);
                     Body.scale(entity.body, newWidth / entity.config.width, 1);
-                    entity.config.width = newWidth;
+                    entity.updateConfigProperty('width', newWidth);
                     this.updatePropertiesPanel();
                 });
             }
@@ -478,7 +478,7 @@ export class Editor {
                 heightInput.addEventListener('input', (e) => {
                     const newHeight = parseFloat(e.target.value);
                     Body.scale(entity.body, 1, newHeight / entity.config.height);
-                    entity.config.height = newHeight;
+                    entity.updateConfigProperty('height', newHeight);
                     this.updatePropertiesPanel();
                 });
             }
@@ -498,7 +498,7 @@ export class Editor {
         const colorInput = document.getElementById('prop-color');
         if (colorInput) {
             colorInput.addEventListener('input', (e) => {
-                entity.config.color = e.target.value;
+                entity.updateConfigProperty('color', e.target.value);
                 entity.body.render.fillStyle = e.target.value;
             });
         }
@@ -517,30 +517,34 @@ export class Editor {
         if (staticInput) {
             staticInput.addEventListener('change', (e) => {
                 Body.setStatic(entity.body, e.target.checked);
+                entity.updateConfigProperty('isStatic', e.target.checked);
             });
         }
         
         const frictionInput = document.getElementById('prop-friction');
         if (frictionInput) {
             frictionInput.addEventListener('input', (e) => {
-                entity.config.friction = parseFloat(e.target.value);
-                entity.body.friction = parseFloat(e.target.value);
+                const value = parseFloat(e.target.value);
+                entity.updateConfigProperty('friction', value);
+                entity.body.friction = value;
             });
         }
         
         const restitutionInput = document.getElementById('prop-restitution');
         if (restitutionInput) {
             restitutionInput.addEventListener('input', (e) => {
-                entity.config.restitution = parseFloat(e.target.value);
-                entity.body.restitution = parseFloat(e.target.value);
+                const value = parseFloat(e.target.value);
+                entity.updateConfigProperty('restitution', value);
+                entity.body.restitution = value;
             });
         }
         
         const densityInput = document.getElementById('prop-density');
         if (densityInput) {
             densityInput.addEventListener('input', (e) => {
-                entity.config.density = parseFloat(e.target.value);
-                Body.setDensity(entity.body, parseFloat(e.target.value));
+                const value = parseFloat(e.target.value);
+                entity.updateConfigProperty('density', value);
+                Body.setDensity(entity.body, value);
             });
         }
         
@@ -548,7 +552,7 @@ export class Editor {
         const collisionsInput = document.getElementById('prop-collisions');
         if (collisionsInput) {
             collisionsInput.addEventListener('change', (e) => {
-                entity.config.collisions = e.target.value;
+                entity.updateConfigProperty('collisions', e.target.value);
                 entity.body.collisionFilter.group = e.target.value === 'off' ? -1 : 0;
             });
         }
@@ -557,23 +561,25 @@ export class Editor {
         const healthInput = document.getElementById('prop-health');
         if (healthInput) {
             healthInput.addEventListener('input', (e) => {
-                entity.config.health = parseFloat(e.target.value);
-                entity.health = parseFloat(e.target.value);
+                const value = parseFloat(e.target.value);
+                entity.updateConfigProperty('health', value);
+                entity.health = value;
             });
         }
         
         const maxHealthInput = document.getElementById('prop-maxHealth');
         if (maxHealthInput) {
             maxHealthInput.addEventListener('input', (e) => {
-                entity.config.maxHealth = parseFloat(e.target.value);
-                entity.maxHealth = parseFloat(e.target.value);
+                const value = parseFloat(e.target.value);
+                entity.updateConfigProperty('maxHealth', value);
+                entity.maxHealth = value;
             });
         }
         
         const healthDisplayInput = document.getElementById('prop-healthDisplay');
         if (healthDisplayInput) {
             healthDisplayInput.addEventListener('change', (e) => {
-                entity.config.healthDisplay = e.target.value;
+                entity.updateConfigProperty('healthDisplay', e.target.value);
                 entity.healthDisplay = e.target.value;
             });
         }

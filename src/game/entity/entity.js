@@ -1,3 +1,4 @@
+import { EntityConfig } from '../../config/entity-config.js';
 import Matter from 'matter-js';
 
 export class Entity {
@@ -7,29 +8,11 @@ export class Entity {
         // Store reference to world for cleanup
         this.world = world;
         
-        // Default configuration
-        this.config = {
-            x: config.x || 0,
-            y: config.y || 0,
-            width: config.width || 40,
-            height: config.height || 40,
-            shape: config.shape || 'rectangle', // 'rectangle' or 'circle'
-            radius: config.radius || 20, // For circle shapes
-            rotation: config.rotation !== undefined ? config.rotation : 0,
-            color: config.color || '#ffffff',
-            strokeColor: config.strokeColor || null,
-            strokeWidth: config.strokeWidth || 0,
-            friction: config.friction !== undefined ? config.friction : 0.3,
-            frictionAir: config.frictionAir !== undefined ? config.frictionAir : 0.01,
-            restitution: config.restitution !== undefined ? config.restitution : 0,
-            density: config.density !== undefined ? config.density : 0.001,
-            isStatic: config.isStatic || config.static || false, // Support both isStatic and static
-            label: config.label || 'entity',
-            health: config.health !== undefined ? config.health : 100,
-            maxHealth: config.maxHealth || 100,
-            healthDisplay: config.healthDisplay || 'none', // 'bar', 'text', or 'none'
-            collisions: config.collisions !== undefined ? config.collisions : 'on' // 'on' or 'off'
-        };
+        // Create EntityConfig instance with provided config
+        this.entityConfig = new EntityConfig(config);
+        
+        // Get the merged config (defaults + provided)
+        this.config = this.entityConfig.get();
 
         // Health properties
         this.health = this.config.health;
@@ -213,6 +196,20 @@ export class Entity {
             ctx.font = `${collisionFontSize}px Arial`;
             ctx.fillText('[NO COLLISION]', screenX, screenY + (12 * scale));
         }
+    }
+
+    // EntityConfig helper methods
+    updateConfigProperty(key, value) {
+        this.entityConfig.updateProperty(key, value);
+        this.config = this.entityConfig.get();
+    }
+
+    getConfigProperty(key) {
+        return this.entityConfig.getProperty(key);
+    }
+
+    getEntityConfig() {
+        return this.entityConfig;
     }
 
     // Empty update method to be overridden by subclasses
