@@ -50,6 +50,12 @@ export class MoveTool extends TransformTool {
   }
 
   onMouseUp(e, worldPos) {
+    if (this.isDragging) {
+      // Update working state after moving
+      if (this.editor && this.editor.updateWorkingState) {
+        this.editor.updateWorkingState();
+      }
+    }
     this.isDragging = false;
     // Update properties panel after move
     if (this.editor && this.editor.updatePropertiesPanel) {

@@ -2,11 +2,11 @@ import Matter from "matter-js";
 import { Camera } from "../camera/camera.js";
 import { InputHandler } from "../input/input-handler.js";
 import { Player } from "./entity/player/player.js";
-import { Entity } from "./entity/entity.js";
-import { Trigger } from "./entity/trigger.js";
 import { Editor } from "../editor/editor.js";
 import { GameConfig } from "../config/game-config.js";
 import { LevelConfig } from "../config/level-config.js";
+import { Engine } from "./engine/engine.js";
+import { World } from "./world/world.js";
 
 export class Game {
   constructor() {
@@ -42,10 +42,31 @@ export class Game {
     this.camera = null;
     this.input = null;
     this.player = null;
-    this.entities = [];
-    this.triggers = [];
+    this.worldInstance = null; // Our custom World class instance
+    this.gameEngine = null; // Our custom Engine class instance
     this.runner = null;
     this.editor = null;
+  }
+
+  // Accessor properties to delegate to engine
+  get entities() {
+    return this.gameEngine ? this.gameEngine.entities : [];
+  }
+
+  set entities(value) {
+    if (this.gameEngine) {
+      this.gameEngine.entities = value;
+    }
+  }
+
+  get triggers() {
+    return this.gameEngine ? this.gameEngine.triggers : [];
+  }
+
+  set triggers(value) {
+    if (this.gameEngine) {
+      this.gameEngine.triggers = value;
+    }
   }
 
   async initialize() {
@@ -81,9 +102,11 @@ export class Game {
     // Calculate initial dimensions maintaining aspect ratio
     const dimensions = this.calculateCanvasDimensions();
 
-    // Create engine
-    this.engine = this.Engine.create();
-    this.world = this.engine.world;
+    // Create world instance
+    this.worldInstance = new World(this.levelData);
+    const { matterEngine, matterWorld } = this.worldInstance.create();
+    this.engine = matterEngine;
+    this.world = matterWorld;
 
     // Create renderer
     this.render = this.Render.create({
@@ -110,6 +133,14 @@ export class Game {
     this.input.bindAction("moveLeft", ["ArrowLeft", "a", "A"]);
     this.input.bindAction("moveRight", ["ArrowRight", "d", "D"]);
     this.input.bindAction("jump", ["ArrowUp", "w", "W", " "]);
+
+    // Create game engine instance
+    this.gameEngine = new Engine(
+      this.engine,
+      this.world,
+      this.levelData,
+      this.worldInstance
+    );
 
     // Create world with loaded level data (this also finds the player)
     this.createWorld();
@@ -141,68 +172,19 @@ export class Game {
 
     // Save initial state as default after everything is loaded
     requestAnimationFrame(() => {
-      this.editor.saveWorkingState();
+      if (this.player) {
+        this.editor.saveWorkingState();
+      } else {
+        console.error("Player was not created - cannot save initial state");
+      }
     });
   }
 
   setupCollisionDetection() {
-    const { Events } = Matter;
-
-    Events.on(this.engine, "collisionStart", (event) => {
-      const pairs = event.pairs;
-
-      pairs.forEach((pair) => {
-        const { bodyA, bodyB } = pair;
-
-        // Check if either body is a kill box
-        const isKillBoxA = bodyA.label && bodyA.label.startsWith("killbox_");
-        const isKillBoxB = bodyB.label && bodyB.label.startsWith("killbox_");
-
-        if (isKillBoxA || isKillBoxB) {
-          const entityBody = isKillBoxA ? bodyB : bodyA;
-
-          // Find the entity that collided with kill box
-          if (this.player && entityBody === this.player.body) {
-            // Player hit kill box
-            this.handlePlayerDeath();
-          } else {
-            // Other entity hit kill box
-            const entity = this.entities.find((e) => e.body === entityBody);
-            if (entity) {
-              entity.destroy();
-              // Remove from entities array
-              this.entities = this.entities.filter((e) => e !== entity);
-            }
-          }
-        }
-
-        // Check for trigger collisions
-        this.triggers.forEach((trigger) => {
-          if (bodyA === trigger.body) {
-            trigger.handleCollisionStart(bodyB);
-          } else if (bodyB === trigger.body) {
-            trigger.handleCollisionStart(bodyA);
-          }
-        });
-      });
-    });
-
-    Events.on(this.engine, "collisionEnd", (event) => {
-      const pairs = event.pairs;
-
-      pairs.forEach((pair) => {
-        const { bodyA, bodyB } = pair;
-
-        // Check for trigger exit events
-        this.triggers.forEach((trigger) => {
-          if (bodyA === trigger.body) {
-            trigger.handleCollisionEnd(bodyB);
-          } else if (bodyB === trigger.body) {
-            trigger.handleCollisionEnd(bodyA);
-          }
-        });
-      });
-    });
+    // Delegate collision detection to engine
+    this.gameEngine.setupCollisionDetection(this.player, () =>
+      this.handlePlayerDeath()
+    );
   }
 
   handlePlayerDeath() {
@@ -655,118 +637,11 @@ export class Game {
       return;
     }
 
-    const { Bodies, World } = Matter;
-    const level = this.levelData;
+    // Create world boundaries
+    this.worldInstance.createBoundaries();
 
-    const bodies = [];
-    this.entities = []; // Store entity instances
-    this.triggers = []; // Store trigger instances
-    this.killBoxes = []; // Store kill box references
-
-    // Create boundaries if enabled
-    if (level.boundaries && level.boundaries.enabled) {
-      const worldSize = level.worldSize || 3000;
-      const wallThickness = level.wallThickness || 50;
-
-      // Ground (kill box)
-      const ground = Bodies.rectangle(
-        0,
-        worldSize / 2,
-        worldSize,
-        wallThickness,
-        {
-          isStatic: true,
-          render: { fillStyle: "#34495e" },
-          label: "killbox_ground",
-        }
-      );
-      bodies.push(ground);
-      this.killBoxes.push(ground);
-
-      // Ceiling (kill box)
-      const ceiling = Bodies.rectangle(
-        0,
-        -worldSize / 2,
-        worldSize,
-        wallThickness,
-        {
-          isStatic: true,
-          render: { fillStyle: "#34495e" },
-          label: "killbox_ceiling",
-        }
-      );
-      bodies.push(ceiling);
-      this.killBoxes.push(ceiling);
-
-      // Left wall (kill box)
-      const leftWall = Bodies.rectangle(
-        -worldSize / 2,
-        0,
-        wallThickness,
-        worldSize,
-        {
-          isStatic: true,
-          render: { fillStyle: "#34495e" },
-          label: "killbox_left",
-        }
-      );
-      bodies.push(leftWall);
-      this.killBoxes.push(leftWall);
-
-      // Right wall (kill box)
-      const rightWall = Bodies.rectangle(
-        worldSize / 2,
-        0,
-        wallThickness,
-        worldSize,
-        {
-          isStatic: true,
-          render: { fillStyle: "#34495e" },
-          label: "killbox_right",
-        }
-      );
-      bodies.push(rightWall);
-      this.killBoxes.push(rightWall);
-    }
-
-    // Create entities from the entities array
-    if (level.entities) {
-      level.entities.forEach((entityConfig) => {
-        const entity = new Entity(entityConfig, this.world);
-        this.entities.push(entity);
-      });
-    }
-
-    // Create triggers from the triggers array
-    if (level.triggers) {
-      level.triggers.forEach((triggerConfig) => {
-        const trigger = new Trigger(triggerConfig, this.world);
-
-        // Add test logging for the test_trigger
-        if (trigger.config.label === "test_trigger") {
-          trigger.onEnter = (otherBody) => {
-            if (this.player && otherBody === this.player.body) {
-              // Player entered trigger
-            }
-          };
-          trigger.onExit = (otherBody) => {
-            if (this.player && otherBody === this.player.body) {
-              // Player exited trigger
-            }
-          };
-          trigger.onStay = (otherBody) => {
-            if (this.player && otherBody === this.player.body) {
-              // Player is inside trigger
-            }
-          };
-        }
-
-        this.triggers.push(trigger);
-      });
-    }
-
-    // Add boundary bodies to the world (entities are already added in their constructor)
-    World.add(this.world, bodies);
+    // Create entities via engine
+    this.gameEngine.createEntities();
 
     // Create the player
     this.createPlayer();
@@ -824,7 +699,10 @@ export class Game {
       if ((e.key === "d" || e.key === "D") && e.ctrlKey) {
         e.preventDefault(); // Prevent browser bookmark dialog
         const infoPanel = document.getElementById("info");
-        if (infoPanel.style.display === "none") {
+        const isHidden =
+          infoPanel.style.display === "none" || !infoPanel.style.display;
+
+        if (isHidden) {
           // Showing panel - restore debug settings
           infoPanel.style.display = "block";
           this.render.options.wireframes = this.wireframes;
@@ -842,7 +720,9 @@ export class Game {
       // Ctrl+I can always be used to toggle editor mode
       if ((e.key === "i" || e.key === "I") && e.ctrlKey) {
         e.preventDefault();
-        this.editor.toggle();
+        if (this.editor) {
+          this.editor.toggle();
+        }
         return;
       }
 
@@ -963,6 +843,9 @@ export class Game {
   }
 
   resetWorld() {
+    // Hide game over dialog first
+    this.hideGameOver();
+
     // If editor exists and has default state, restore it
     if (this.editor && this.editor.defaultState) {
       this.editor.restoreState(this.editor.defaultState);
@@ -978,7 +861,6 @@ export class Game {
     this.camera.setTarget(this.player.body);
     this.camera.x = 0;
     this.camera.y = 0;
-    this.hideGameOver();
   }
 
   async switchLevel(levelUrl = null) {
@@ -1036,12 +918,12 @@ export class Game {
     const infoPanel = document.getElementById("info");
     const isPanelVisible = infoPanel && infoPanel.style.display !== "none";
 
-    // Update trigger visibility based on debug panel state
-    if (this.triggers) {
-      this.triggers.forEach((trigger) => {
+    // Update trigger visibility and state via engine
+    if (this.gameEngine) {
+      this.gameEngine.triggers.forEach((trigger) => {
         trigger.body.render.visible = isPanelVisible;
-        trigger.update();
       });
+      this.gameEngine.update(this.player);
     }
 
     requestAnimationFrame(() => this.gameLoop());

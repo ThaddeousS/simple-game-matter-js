@@ -44,8 +44,11 @@ export class EntityConfig extends Config {
       healthEnabled: false, // Whether health system is enabled for this entity
 
       // Collision
-      collisions: "solid", // 'solid' or 'trigger'
       collisionsEnabled: true, // Whether collision system is enabled
+      collisionGroups: [], // Array of collision group names
+
+      // Type
+      entityType: "entity", // 'entity', 'cloud', 'trigger'
 
       // Identity
       label: "entity",

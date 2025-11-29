@@ -34,6 +34,30 @@ export class EntityTool extends Tool {
         color: "#2ecc71",
         isStatic: true,
       },
+      {
+        name: "Cloud (Short)",
+        width: 100,
+        height: 20,
+        color: "#ffffff99",
+        isStatic: true,
+        entityType: "cloud",
+      },
+      {
+        name: "Cloud (Medium)",
+        width: 200,
+        height: 20,
+        color: "#ffffff99",
+        isStatic: true,
+        entityType: "cloud",
+      },
+      {
+        name: "Cloud (Long)",
+        width: 300,
+        height: 20,
+        color: "#ffffff99",
+        isStatic: true,
+        entityType: "cloud",
+      },
       { name: "Circle (Small)", shape: "circle", radius: 20, color: "#e74c3c" },
       {
         name: "Circle (Medium)",
@@ -224,7 +248,23 @@ export class EntityTool extends Tool {
       entityConfig.isStatic = type.isStatic;
     }
 
-    const newEntity = new Entity(entityConfig, this.editor.game.world);
+    // Add entityType if specified (e.g., 'cloud')
+    if (type.entityType !== undefined) {
+      entityConfig.entityType = type.entityType;
+    }
+
+    // Create the appropriate entity type
+    let newEntity;
+    if (entityConfig.entityType === "cloud") {
+      newEntity = new Cloud(entityConfig, this.editor.game.world);
+      // Add to clouds array if it exists
+      if (this.editor.game.gameEngine && this.editor.game.gameEngine.clouds) {
+        this.editor.game.gameEngine.clouds.push(newEntity);
+      }
+    } else {
+      newEntity = new Entity(entityConfig, this.editor.game.world);
+    }
+
     this.editor.game.entities.push(newEntity);
 
     // Update working state to include this new entity

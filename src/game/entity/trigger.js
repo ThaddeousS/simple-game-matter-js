@@ -4,11 +4,11 @@ export class Trigger extends Entity {
   constructor(config, world) {
     // Force sensor to be on for triggers
     const triggerConfig = {
-      collisions: "off", // Sensors don't have physical collisions
       isStatic: true, // Triggers don't move
       label: config.label || "trigger",
       color: config.color || "#00ffff33", // Semi-transparent cyan default
       healthDisplay: "none", // Triggers don't show health
+      entityType: "trigger", // Ensure entity type is set
       ...config,
     };
 

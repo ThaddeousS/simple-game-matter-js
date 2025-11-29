@@ -3,6 +3,8 @@ import { EntityTool } from "./tools/entity-tool.js";
 import { DeleteTool } from "./tools/delete-tool.js";
 import { Entity } from "../game/entity/entity.js";
 import { Player } from "../game/entity/player/player.js";
+import { Cloud } from "../game/entity/cloud.js";
+import { Trigger } from "../game/entity/trigger.js";
 import Matter from "matter-js";
 
 export class Editor {
@@ -417,6 +419,27 @@ export class Editor {
     html += "</div>";
     html += "</div>";
 
+    // Entity Type section - only show for non-player entities
+    const isPlayer = selectedEntity.config.label === "player";
+    if (!isPlayer) {
+      html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
+      html +=
+        '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Entity Type</div>';
+      const entityTypeOptions = ["entity", "cloud", "trigger"];
+      const currentEntityType = config.entityType || "entity";
+      html += this.createPropertyInput(
+        "Type",
+        "entityType",
+        currentEntityType,
+        "select",
+        1,
+        null,
+        null,
+        entityTypeOptions
+      );
+      html += "</div>";
+    }
+
     // Collision
     html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
     html +=
@@ -425,16 +448,19 @@ export class Editor {
     html += `<div id="collision-label" style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">${config.collisionsEnabled !== false ? "Collision (enabled)" : "Collision (disabled)"}</div>`;
     html += "</div>";
     html += `<div id="collision-properties-container" style="display: ${config.collisionsEnabled !== false ? "block" : "none"};">`;
-    html += this.createPropertyInput(
-      "Type",
-      "collisions",
-      config.collisions || "on",
-      "select",
-      1,
-      null,
-      null,
-      ["solid", "trigger"]
-    );
+
+    // Collision Groups
+    html += '<div style="margin-top: 8px;">';
+    html +=
+      '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">';
+    html +=
+      '<label style="color: white; font-size: 12px;">Collision Groups</label>';
+    html +=
+      '<button id="add-collision-group-btn" style="background: #27ae60; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 4px;">+ Add Group</button>';
+    html += "</div>";
+    html += '<div id="collision-groups-list" style="margin-top: 4px;"></div>';
+    html += "</div>";
+
     html += "</div>";
     html += "</div>";
 
@@ -800,17 +826,18 @@ export class Editor {
 
         if (enabled) {
           collisionPropertiesContainer.style.display = "block";
-          // Enable collisions with solid type by default
-          entity.updateConfigProperty("collisions", "solid");
-          entity.body.isSensor = false;
-          // Reset collision group to default (0 = collides with everything)
+          // Reset collision group and filters to default
           entity.body.collisionFilter.group = 0;
+          entity.body.collisionFilter.category = 0x0001; // Default category
+          entity.body.collisionFilter.mask = 0xffff; // Collide with everything
+
+          // Reapply collision groups if any exist
+          if (entity.applyCollisionGroups) {
+            entity.applyCollisionGroups();
+          }
         } else {
           collisionPropertiesContainer.style.display = "none";
-          // Disable collisions completely
-          entity.updateConfigProperty("collisions", "off");
-          entity.body.isSensor = false;
-          // Set collision group to negative to bypass all Matter.js collisions
+          // Set collision group to -1 to bypass all Matter.js collisions
           entity.body.collisionFilter.group = -1;
         }
 
@@ -819,13 +846,75 @@ export class Editor {
       });
     }
 
-    // Collision type dropdown ('solid' or 'trigger')
-    const collisionsInput = document.getElementById("prop-collisions");
-    if (collisionsInput) {
-      collisionsInput.addEventListener("change", (e) => {
-        entity.updateConfigProperty("collisions", e.target.value);
-        // Update sensor state: 'trigger' = sensor (no physical collision), 'solid' = normal collision
-        entity.body.isSensor = e.target.value === "trigger";
+    // Entity type dropdown ('entity', 'cloud', 'trigger')
+    const entityTypeInput = document.getElementById("prop-entityType");
+    if (entityTypeInput) {
+      entityTypeInput.addEventListener("change", (e) => {
+        const newType = e.target.value;
+        const oldType = entity.config.entityType || "entity";
+
+        if (newType === oldType) return;
+
+        // Save current state
+        const oldConfig = entity.getEntityConfig().get();
+        const oldPosition = { ...entity.body.position };
+        const oldVelocity = { ...entity.body.velocity };
+        const oldAngle = entity.body.angle;
+        const oldAngularVelocity = entity.body.angularVelocity;
+
+        // Update entity type in config
+        oldConfig.entityType = newType;
+
+        // Destroy old entity
+        entity.destroy();
+
+        // Remove from current arrays
+        const entityIndex = editor.game.entities.indexOf(entity);
+        if (entityIndex > -1) {
+          editor.game.entities.splice(entityIndex, 1);
+        }
+
+        if (editor.game.gameEngine && editor.game.gameEngine.clouds) {
+          const cloudIndex = editor.game.gameEngine.clouds.indexOf(entity);
+          if (cloudIndex > -1) {
+            editor.game.gameEngine.clouds.splice(cloudIndex, 1);
+          }
+        }
+
+        // Create new entity of the appropriate type
+        let newEntity;
+        if (newType === "cloud") {
+          newEntity = new Cloud(oldConfig, editor.game.world);
+          if (editor.game.gameEngine && editor.game.gameEngine.clouds) {
+            editor.game.gameEngine.clouds.push(newEntity);
+          }
+        } else if (newType === "trigger") {
+          newEntity = new Trigger(oldConfig, editor.game.world);
+          if (editor.game.gameEngine && editor.game.gameEngine.triggers) {
+            editor.game.gameEngine.triggers.push(newEntity);
+          }
+        } else {
+          newEntity = new Entity(oldConfig, editor.game.world);
+        }
+
+        // Restore physics state
+        const { Body } = Matter;
+        Body.setPosition(newEntity.body, oldPosition);
+        Body.setVelocity(newEntity.body, oldVelocity);
+        Body.setAngle(newEntity.body, oldAngle);
+        Body.setAngularVelocity(newEntity.body, oldAngularVelocity);
+
+        // Add to entities array
+        editor.game.entities.push(newEntity);
+
+        // Update selection to new entity
+        if (editor.tools.select) {
+          editor.tools.select.selectedEntity = newEntity;
+        }
+
+        // Refresh properties panel
+        editor.updatePropertiesPanel();
+        editor.updateWorkingState();
       });
     }
 
@@ -885,10 +974,108 @@ export class Editor {
         }
       });
     }
+
+    // Collision groups
+    this.renderCollisionGroups(entity);
+
+    const addGroupBtn = document.getElementById("add-collision-group-btn");
+    if (addGroupBtn) {
+      addGroupBtn.addEventListener("click", () => {
+        const groups = entity.config.collisionGroups || [];
+        groups.push(""); // Add empty group name
+        entity.updateConfigProperty("collisionGroups", groups);
+        this.renderCollisionGroups(entity);
+        editor.updateWorkingState();
+      });
+    }
+  }
+
+  renderCollisionGroups(entity) {
+    const groupsList = document.getElementById("collision-groups-list");
+    if (!groupsList) return;
+
+    const groups = entity.config.collisionGroups || [];
+    const editor = this;
+
+    groupsList.innerHTML = "";
+
+    groups.forEach((groupName, index) => {
+      const groupItem = document.createElement("div");
+      groupItem.style.cssText = `
+                        display: flex;
+                        align-items: center;
+                        gap: 4px;
+                        margin-bottom: 4px;
+                        padding: 4px;
+                        background: rgba(255, 255, 255, 0.05);
+                        border-radius: 3px;
+                    `;
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = groupName;
+      input.placeholder = "Group name";
+      input.style.cssText = `
+                        flex: 1;
+                        background: #2c3e50;
+                        color: white;
+                        border: 1px solid #555;
+                        padding: 4px 8px;
+                        border-radius: 3px;
+                        font-size: 11px;
+                    `;
+
+      input.addEventListener("input", (e) => {
+        groups[index] = e.target.value;
+        entity.updateConfigProperty("collisionGroups", groups);
+        this.applyCollisionGroups(entity);
+        editor.updateWorkingState();
+      });
+
+      const removeBtn = document.createElement("button");
+      removeBtn.textContent = "×";
+      removeBtn.style.cssText = `
+                        background: #e74c3c;
+                        color: white;
+                        border: none;
+                        padding: 4px 8px;
+                        border-radius: 3px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        font-weight: bold;
+                        line-height: 1;
+                    `;
+
+      removeBtn.addEventListener("click", () => {
+        groups.splice(index, 1);
+        entity.updateConfigProperty("collisionGroups", groups);
+        this.renderCollisionGroups(entity);
+        this.applyCollisionGroups(entity);
+        editor.updateWorkingState();
+      });
+
+      groupItem.appendChild(input);
+      groupItem.appendChild(removeBtn);
+      groupsList.appendChild(groupItem);
+    });
+  }
+
+  applyCollisionGroups(entity) {
+    // Delegate to the entity's applyCollisionGroups method
+    if (entity && entity.applyCollisionGroups) {
+      entity.applyCollisionGroups();
+    }
   }
 
   toggle() {
-    this.isActive = !this.isActive;
+    // Check current actual display state to handle initial hidden state
+    const currentlyHidden =
+      this.editorContainer.style.display === "none" ||
+      !this.editorContainer.style.display;
+
+    // Set isActive based on what we want (opposite of current state)
+    this.isActive = currentlyHidden;
+
     this.editorContainer.style.display = this.isActive ? "block" : "none";
 
     const canvas = this.game.render.canvas;
@@ -899,7 +1086,12 @@ export class Editor {
       this.game.pauseSimulation();
       canvas.style.cursor = "grab";
 
-      // Highlight the select tool button (default active tool)
+      // Reset all tool buttons to default color
+      document.querySelectorAll(".editor-tool-btn").forEach((btn) => {
+        btn.style.background = "#3498db";
+      });
+
+      // Highlight only the select tool button (default active tool)
       const selectBtn = document.getElementById("tool-select");
       if (selectBtn) {
         selectBtn.style.background = "#2ecc71";
@@ -1105,12 +1297,19 @@ export class Editor {
     // Save current game state as working state
     const { Body } = Matter;
 
+    // Safety check - ensure player exists
+    if (!this.game.player) {
+      console.warn("Cannot save working state: player does not exist yet");
+      return;
+    }
+
     this.workingState = {
       playerPosition: { ...this.game.player.body.position },
       playerVelocity: { ...this.game.player.body.velocity },
       playerAngle: this.game.player.body.angle,
       playerAngularVelocity: this.game.player.body.angularVelocity,
       playerHealth: this.game.player.health,
+      playerConfig: this.game.player.getEntityConfig().get(), // Save player config including dimensions
       cameraPosition: { x: this.game.camera.x, y: this.game.camera.y },
       cameraZoom: this.game.camera.zoom,
       entities: this.game.entities.map((entity) => ({
@@ -1145,6 +1344,10 @@ export class Editor {
     if (this.workingState) {
       this.defaultState = JSON.parse(JSON.stringify(this.workingState));
       this.restoreState(this.defaultState);
+    } else {
+      console.warn(
+        "Cannot apply working state: state was not saved (player may not exist)"
+      );
     }
   }
 
@@ -1163,17 +1366,23 @@ export class Editor {
     // Generic method to restore game state
     const { Body, World } = Matter;
 
-    // Restore player state
+    // Destroy old player and recreate from saved config
+    if (this.game.player) {
+      this.game.player.destroy();
+    }
+
+    // Recreate player with saved config (includes dimensions)
+    this.game.player = new Player(state.playerConfig, this.game.world);
+
+    // Restore player physics state
     Body.setPosition(this.game.player.body, state.playerPosition);
     Body.setVelocity(this.game.player.body, state.playerVelocity);
     Body.setAngle(this.game.player.body, state.playerAngle);
     Body.setAngularVelocity(this.game.player.body, state.playerAngularVelocity);
     this.game.player.health = state.playerHealth;
 
-    if (this.game.player.isDestroyed) {
-      this.game.player.isDestroyed = false;
-      World.add(this.game.world, this.game.player.body);
-    }
+    // Re-target camera to new player
+    this.game.camera.setTarget(this.game.player.body);
 
     // Restore camera
     this.game.camera.x = state.cameraPosition.x;
@@ -1184,9 +1393,26 @@ export class Editor {
     this.game.entities.forEach((entity) => entity.destroy());
     this.game.entities = [];
 
+    // Clear clouds array
+    if (this.game.gameEngine && this.game.gameEngine.clouds) {
+      this.game.gameEngine.clouds = [];
+    }
+
     // Recreate entities from state
     state.entities.forEach((savedEntity) => {
-      const entity = new Entity(savedEntity.config, this.game.world);
+      let entity;
+
+      // Create the appropriate entity type based on config
+      if (savedEntity.config.entityType === "cloud") {
+        entity = new Cloud(savedEntity.config, this.game.world);
+        // Add to clouds array
+        if (this.game.gameEngine && this.game.gameEngine.clouds) {
+          this.game.gameEngine.clouds.push(entity);
+        }
+      } else {
+        entity = new Entity(savedEntity.config, this.game.world);
+      }
+
       Body.setPosition(entity.body, savedEntity.position);
       Body.setVelocity(entity.body, savedEntity.velocity);
       Body.setAngle(entity.body, savedEntity.angle);
@@ -1201,6 +1427,9 @@ export class Editor {
       this.tools.select.selectedEntity = null;
       this.tools.select.currentSubTool = null;
     }
+
+    // Reset to select tool
+    this.selectTool("select");
 
     // Update properties panel
     this.updatePropertiesPanel();

@@ -20,8 +20,9 @@ export class Entity {
     this.healthDisplay = this.config.healthDisplay;
     this.isDestroyed = false;
 
-    // Determine if this is a sensor (trigger vs solid collision)
-    const isSensor = this.config.collisions === "trigger";
+    // Determine if this is a sensor based on entityType
+    // Triggers are always sensors (no physical collision)
+    const isSensor = this.config.entityType === "trigger";
 
     // Create the physical body based on shape
     if (this.config.shape === "circle") {
@@ -108,10 +109,61 @@ export class Entity {
     if (this.config.collisionsEnabled === false) {
       // Collisions disabled: set collision group to -1 to bypass all collision detection
       this.body.collisionFilter.group = -1;
+    } else {
+      // Collisions enabled: set default collision filter (0 = default collisions)
+      this.body.collisionFilter.group = 0;
+      this.body.collisionFilter.category = 0x0001; // Default category
+      this.body.collisionFilter.mask = 0xffff; // Collide with everything
+
+      // Apply collision groups if any exist
+      if (
+        this.config.collisionGroups &&
+        this.config.collisionGroups.length > 0
+      ) {
+        this.applyCollisionGroups();
+      }
     }
 
     // Add to world
     World.add(world, this.body);
+  }
+
+  applyCollisionGroups() {
+    // Apply collision groups to entity's collision filter
+    const groups = this.config.collisionGroups || [];
+
+    if (groups.length > 0) {
+      // Create a bitmask from group names
+      let category = 0x0001; // Start with default category
+
+      // For each group, set a bit in the category
+      groups.forEach((groupName) => {
+        if (groupName) {
+          // Use a simple hash to assign bit positions
+          const bitPosition = this.hashStringToBit(groupName);
+          category |= 1 << bitPosition;
+        }
+      });
+
+      this.body.collisionFilter.category = category;
+      // Mask stays as collide-with-all for now
+      this.body.collisionFilter.mask = 0xffff;
+    } else {
+      // No groups: reset to defaults
+      this.body.collisionFilter.category = 0x0001;
+      this.body.collisionFilter.mask = 0xffff;
+    }
+  }
+
+  hashStringToBit(str) {
+    // Simple hash function to convert string to bit position (1-15)
+    // Bit 0 is reserved for default category
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return (Math.abs(hash) % 15) + 1; // Return 1-15 (skip bit 0)
   }
 
   getPosition() {

@@ -98,6 +98,11 @@ export class ScaleTool extends TransformTool {
           height: this.entity.config.height,
         };
       }
+
+      // Update working state after scaling
+      if (this.editor && this.editor.updateWorkingState) {
+        this.editor.updateWorkingState();
+      }
     }
     this.isDragging = false;
     // Update properties panel after scaling
