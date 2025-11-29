@@ -9,7 +9,7 @@ import { Editor } from '../editor/editor.js'
 export class Game {
     constructor() {
         // Module aliases
-        const { Engine, Render, World, Bodies, Runner, Events } = Matter;
+        const { Engine, Render, Runner, } = Matter;
 
         // Load game config, player config, and level data
         this.gameConfig = this.getDefaultGameConfig();
@@ -239,6 +239,11 @@ export class Game {
                 if (this.debugLabels && isPanelVisible) {
                     this.player.renderDebugLabel(context, this.camera);
                 }
+            }
+            
+            // Render selection highlight if in editor mode with SelectTool
+            if (this.editor && this.editor.isActive && this.editor.currentTool === this.editor.tools.select) {
+                this.editor.tools.select.renderHighlight(context, this.camera);
             }
         });
     }

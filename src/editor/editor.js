@@ -203,32 +203,36 @@ export class Editor {
         canvas.addEventListener('mousedown', (e) => {
             if (!this.isActive || this.isResizingLeft || this.isResizingRight) return;
             
-            // Only start dragging if using Select tool
-            if (this.currentTool === this.tools.select) {
-                // Start dragging only if not clicking on an entity
-                const rect = canvas.getBoundingClientRect();
-                const screenX = e.clientX - rect.left;
-                const screenY = e.clientY - rect.top;
-                const worldPos = this.currentTool.screenToWorld(screenX, screenY);
-                
-                const entities = [...this.game.entities, this.game.player];
-                const clickedEntity = entities.find(entity => 
-                    this.tools.select.isPointInEntity(worldPos, entity)
-                );
-                
-                if (!clickedEntity) {
-                    this.isDragging = true;
-                    this.dragStartX = e.clientX;
-                    this.dragStartY = e.clientY;
-                    this.cameraStartX = this.game.camera.x;
-                    this.cameraStartY = this.game.camera.y;
-                    canvas.style.cursor = 'grabbing';
-                }
+            // Only start camera dragging if Ctrl key is held
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault(); // Prevent default Ctrl+click behavior
+                this.isDragging = true;
+                this.dragStartX = e.clientX;
+                this.dragStartY = e.clientY;
+                this.cameraStartX = this.game.camera.x;
+                this.cameraStartY = this.game.camera.y;
+                canvas.style.cursor = 'grabbing';
             }
         });
         
         canvas.addEventListener('mousemove', (e) => {
             if (!this.isActive) return;
+            
+            // Update cursor based on Ctrl key state
+            if (!this.isDragging && !this.isResizingLeft && !this.isResizingRight) {
+                if (e.ctrlKey || e.metaKey) {
+                    canvas.style.cursor = 'grab';
+                } else if (this.currentTool) {
+                    // Restore tool cursor
+                    if (this.currentTool === this.tools.select) {
+                        canvas.style.cursor = 'default';
+                    } else if (this.currentTool === this.tools.entity) {
+                        canvas.style.cursor = 'crosshair';
+                    } else if (this.currentTool === this.tools.delete) {
+                        canvas.style.cursor = 'not-allowed';
+                    }
+                }
+            }
             
             if (this.isDragging && !this.isResizingLeft && !this.isResizingRight) {
                 // Calculate camera movement in world space (accounting for zoom)
@@ -249,7 +253,19 @@ export class Editor {
         canvas.addEventListener('mouseup', () => {
             if (!this.isActive) return;
             
-            this.isDragging = false;
+            if (this.isDragging) {
+                this.isDragging = false;
+                // Reset cursor based on current tool
+                if (this.currentTool) {
+                    if (this.currentTool === this.tools.select) {
+                        canvas.style.cursor = 'default';
+                    } else if (this.currentTool === this.tools.entity) {
+                        canvas.style.cursor = 'crosshair';
+                    } else if (this.currentTool === this.tools.delete) {
+                        canvas.style.cursor = 'not-allowed';
+                    }
+                }
+            }
         });
         
         canvas.addEventListener('mouseleave', () => {
@@ -371,8 +387,18 @@ export class Editor {
     setupToolListeners() {
         const canvas = this.game.render.canvas;
         
+        // Prevent default context menu when in editor mode
+        canvas.addEventListener('contextmenu', (e) => {
+            if (this.isActive) {
+                e.preventDefault();
+            }
+        });
+        
         canvas.addEventListener('mousedown', (e) => {
             if (!this.isActive || this.isDragging) return;
+            
+            // Don't trigger tool events if clicking on context menu
+            if (e.target.closest('#entity-context-menu') || e.target.closest('#select-context-menu')) return;
             
             const rect = canvas.getBoundingClientRect();
             const screenX = e.clientX - rect.left;
