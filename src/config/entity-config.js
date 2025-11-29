@@ -45,6 +45,7 @@ export class EntityConfig extends Config {
 
       // Collision
       collisions: "on", // 'on' or 'off'
+      collisionsEnabled: true, // Whether collision system is enabled
 
       // Identity
       label: "entity",

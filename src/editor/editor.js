@@ -423,17 +423,23 @@ export class Editor {
     // Collision
     html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
     html +=
-      '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Collision</div>';
+      '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto;">';
+    html += `<input type="checkbox" id="collision-enabled-checkbox" style="width: 16px; height: 16px; cursor: pointer;" ${config.collisionsEnabled !== false ? "checked" : ""}>`;
+    html +=
+      '<div style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">Collision</div>';
+    html += "</div>";
+    html += `<div id="collision-properties-container" style="display: ${config.collisionsEnabled !== false ? "block" : "none"};">`;
     html += this.createPropertyInput(
-      "Collisions",
+      "Type",
       "collisions",
-      config.collisions || "default",
+      config.collisions || "on",
       "select",
       1,
       null,
       null,
-      ["default", "off"]
+      ["on"]
     );
+    html += "</div>";
     html += "</div>";
 
     // Health
@@ -668,29 +674,53 @@ export class Editor {
           }
         }
 
-        // Find entity in array
-        const entityIndex = editor.game.entities.indexOf(entity);
-        if (entityIndex === -1) return;
+        // Check if this is the player
+        const isPlayer = entity === editor.game.player;
 
-        // Remove old entity
-        entity.destroy();
-        editor.game.entities.splice(entityIndex, 1);
+        if (isPlayer) {
+          // Handle player shape change
+          entity.destroy();
 
-        // Create new entity with updated config
-        const newEntity = new Entity(oldConfig, editor.game.world);
+          // Create new player with updated config
+          const newPlayer = new Player(oldConfig, editor.game.world);
 
-        // Restore physics state
-        Body.setPosition(newEntity.body, position);
-        Body.setVelocity(newEntity.body, velocity);
-        Body.setAngle(newEntity.body, angle);
-        Body.setAngularVelocity(newEntity.body, angularVelocity);
+          // Restore physics state
+          Body.setPosition(newPlayer.body, position);
+          Body.setVelocity(newPlayer.body, velocity);
+          Body.setAngle(newPlayer.body, angle);
+          Body.setAngularVelocity(newPlayer.body, angularVelocity);
 
-        // Add to entities array
-        editor.game.entities.splice(entityIndex, 0, newEntity);
+          // Replace player reference
+          editor.game.player = newPlayer;
 
-        // Update selection and refresh properties panel
-        editor.tools.select.selectedEntity = newEntity;
-        editor.updatePropertiesPanel(newEntity);
+          // Update selection and refresh properties panel
+          editor.tools.select.selectedEntity = newPlayer;
+          editor.updatePropertiesPanel(newPlayer);
+        } else {
+          // Handle regular entity shape change
+          const entityIndex = editor.game.entities.indexOf(entity);
+          if (entityIndex === -1) return;
+
+          // Remove old entity
+          entity.destroy();
+          editor.game.entities.splice(entityIndex, 1);
+
+          // Create new entity with updated config
+          const newEntity = new Entity(oldConfig, editor.game.world);
+
+          // Restore physics state
+          Body.setPosition(newEntity.body, position);
+          Body.setVelocity(newEntity.body, velocity);
+          Body.setAngle(newEntity.body, angle);
+          Body.setAngularVelocity(newEntity.body, angularVelocity);
+
+          // Add to entities array
+          editor.game.entities.splice(entityIndex, 0, newEntity);
+
+          // Update selection and refresh properties panel
+          editor.tools.select.selectedEntity = newEntity;
+          editor.updatePropertiesPanel(newEntity);
+        }
       });
     }
 
@@ -744,12 +774,39 @@ export class Editor {
       });
     }
 
-    // Collision
+    // Collision enabled checkbox
+    const collisionEnabledCheckbox = document.getElementById(
+      "collision-enabled-checkbox"
+    );
+    const collisionPropertiesContainer = document.getElementById(
+      "collision-properties-container"
+    );
+    if (collisionEnabledCheckbox && collisionPropertiesContainer) {
+      collisionEnabledCheckbox.addEventListener("change", (e) => {
+        const enabled = e.target.checked;
+        entity.updateConfigProperty("collisionsEnabled", enabled);
+
+        if (enabled) {
+          collisionPropertiesContainer.style.display = "block";
+          // Enable collisions
+          entity.updateConfigProperty("collisions", "on");
+          entity.body.isSensor = false;
+        } else {
+          collisionPropertiesContainer.style.display = "none";
+          // Disable collisions (make it a sensor)
+          entity.updateConfigProperty("collisions", "off");
+          entity.body.isSensor = true;
+        }
+      });
+    }
+
+    // Collision type dropdown (currently only 'on' option)
     const collisionsInput = document.getElementById("prop-collisions");
     if (collisionsInput) {
       collisionsInput.addEventListener("change", (e) => {
         entity.updateConfigProperty("collisions", e.target.value);
-        entity.body.collisionFilter.group = e.target.value === "off" ? -1 : 0;
+        // Update sensor state based on collision type
+        entity.body.isSensor = e.target.value === "off";
       });
     }
 
@@ -796,6 +853,16 @@ export class Editor {
           healthPropertiesContainer.style.display = "block";
         } else {
           healthPropertiesContainer.style.display = "none";
+          // Disable health display rendering when health is disabled
+          entity.updateConfigProperty("healthDisplay", "none");
+          entity.healthDisplay = "none";
+
+          // Reset the dropdown to 'none'
+          const healthDisplayDropdown =
+            document.getElementById("prop-healthDisplay");
+          if (healthDisplayDropdown) {
+            healthDisplayDropdown.value = "none";
+          }
         }
       });
     }
@@ -1386,6 +1453,8 @@ export class Editor {
             maxHealth: config.maxHealth,
             healthDisplay: config.healthDisplay,
             healthEnabled: config.healthEnabled,
+            collisions: config.collisions,
+            collisionsEnabled: config.collisionsEnabled,
             label: config.label,
           };
         }),
