@@ -9,7 +9,7 @@ import { Editor } from '../editor/editor.js'
 export class Game {
     constructor() {
         // Module aliases
-        const { Engine, Render, Runner } = Matter;
+        const { Engine, Render, World, Bodies, Runner, Events } = Matter;
 
         // Load game config, player config, and level data
         this.gameConfig = this.getDefaultGameConfig();
@@ -101,6 +101,11 @@ export class Game {
 
         // Game loop
         this.gameLoop();
+        
+        // Save initial state after everything is loaded
+        requestAnimationFrame(() => {
+            this.editor.saveInitialState();
+        });
     }
 
     setupCollisionDetection() {
