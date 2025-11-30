@@ -1,23 +1,24 @@
-import { Game } from './src/game/game.js';
+import { Editor } from "./src/editor/editor.js";
+import { Game } from "./src/game/game.js";
 
 const init = () => {
-    let game = undefined;
+  let game = undefined;
+  let editor = undefined;
 
-    window.addEventListener('load', async () => {
-        game = new Game();
-        await game.initialize();
+  window.addEventListener("load", async () => {
+    console.log("Initializing game...");
+    game = new Game();
+    await game.initialize();
 
-        const infoHeader = document.getElementById('info-header');
-        infoHeader.addEventListener('click', () => {
-            game.toggleInfoPanel();
-        });
-        
-        // Setup game over reset button
-        const resetButton = document.getElementById('reset-button');
-        resetButton.addEventListener('click', () => {
-            game.resetWorld();
-        });
-});
+    console.log("Initializing editor...");
+    editor = new Editor(game);
+    await editor.initialize();
+
+    // Setup debug panel header click functionality
+    game.debug.setupHeaderClickListener(() => {
+      game.toggleInfoPanel();
+    });
+  });
 };
 
 init();

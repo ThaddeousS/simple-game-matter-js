@@ -1,12 +1,12 @@
 import Matter from "matter-js";
 import { Camera } from "../camera/camera.js";
-import { InputHandler } from "../input/input-handler.js";
-import { Player } from "./entity/player/player.js";
-import { Editor } from "../editor/editor.js";
 import { GameConfig } from "../config/game-config.js";
 import { LevelConfig } from "../config/level-config.js";
 import { Engine } from "./engine/engine.js";
 import { World } from "./world/world.js";
+import { Debug } from "./ui/debug.js";
+import { GameOverDialog } from "./ui/dialog/game-over-dialog.js";
+import { GameEvents } from "../events/game-events.js";
 
 export class Game {
   constructor() {
@@ -25,7 +25,12 @@ export class Game {
     // Initialize debug states separately
     this.debugLabels = false;
     this.wireframes = false;
-    this.inputDisabled = false;
+
+    // Create debug panel
+    this.debug = new Debug();
+
+    // Create game over dialog
+    this.gameOverDialog = new GameOverDialog(() => this.resetWorld());
 
     // Store Matter.js references
     this.Engine = Engine;
@@ -40,12 +45,24 @@ export class Game {
     this.world = null;
     this.render = null;
     this.camera = null;
-    this.input = null;
-    this.player = null;
     this.worldInstance = null; // Our custom World class instance
     this.gameEngine = null; // Our custom Engine class instance
     this.runner = null;
-    this.editor = null;
+  }
+
+  // Accessor properties to delegate to engine
+  get player() {
+    return this.gameEngine ? this.gameEngine.player : null;
+  }
+
+  set player(value) {
+    if (this.gameEngine) {
+      this.gameEngine.player = value;
+    }
+  }
+
+  get input() {
+    return this.gameEngine ? this.gameEngine.input : null;
   }
 
   // Accessor properties to delegate to engine
@@ -126,23 +143,16 @@ export class Game {
     // Set initial zoom from level config
     this.camera.setZoom(this.levelData.zoom);
 
-    // Initialize input
-    this.input = new InputHandler();
-
-    // Bind input actions
-    this.input.bindAction("moveLeft", ["ArrowLeft", "a", "A"]);
-    this.input.bindAction("moveRight", ["ArrowRight", "d", "D"]);
-    this.input.bindAction("jump", ["ArrowUp", "w", "W", " "]);
-
-    // Create game engine instance
+    // Create game engine instance (handles input and player)
     this.gameEngine = new Engine(
       this.engine,
       this.world,
       this.levelData,
-      this.worldInstance
+      this.worldInstance,
+      this.playerConfig
     );
 
-    // Create world with loaded level data (this also finds the player)
+    // Create world with loaded level data (this also creates the player)
     this.createWorld();
 
     // Set camera to follow player
@@ -164,27 +174,13 @@ export class Game {
     // Set up collision detection
     this.setupCollisionDetection();
 
-    // Initialize editor
-    this.editor = new Editor(this);
-
     // Game loop
     this.gameLoop();
-
-    // Save initial state as default after everything is loaded
-    requestAnimationFrame(() => {
-      if (this.player) {
-        this.editor.saveWorkingState();
-      } else {
-        console.error("Player was not created - cannot save initial state");
-      }
-    });
   }
 
   setupCollisionDetection() {
     // Delegate collision detection to engine
-    this.gameEngine.setupCollisionDetection(this.player, () =>
-      this.handlePlayerDeath()
-    );
+    this.gameEngine.setupCollisionDetection(() => this.handlePlayerDeath());
   }
 
   handlePlayerDeath() {
@@ -195,13 +191,11 @@ export class Game {
   }
 
   showGameOver() {
-    const dialog = document.getElementById("game-over-dialog");
-    dialog.style.display = "block";
+    this.gameOverDialog.open();
   }
 
   hideGameOver() {
-    const dialog = document.getElementById("game-over-dialog");
-    dialog.style.display = "none";
+    this.gameOverDialog.close();
   }
 
   pauseSimulation() {
@@ -209,8 +203,10 @@ export class Game {
     const { Runner } = Matter;
     Runner.stop(this.runner);
 
-    // Disable input
-    this.inputDisabled = true;
+    // Disable input via engine
+    if (this.gameEngine) {
+      this.gameEngine.inputEnabled = false;
+    }
 
     // Disable camera following
     this.camera.followEnabled = false;
@@ -221,8 +217,10 @@ export class Game {
     const { Runner } = Matter;
     Runner.run(this.runner, this.engine);
 
-    // Enable input
-    this.inputDisabled = false;
+    // Enable input via engine
+    if (this.gameEngine) {
+      this.gameEngine.inputEnabled = true;
+    }
 
     // Enable camera following
     this.camera.followEnabled = true;
@@ -260,14 +258,12 @@ export class Game {
         }
       }
 
-      // Render selection highlight if in editor mode with SelectTool
-      if (
-        this.editor &&
-        this.editor.isActive &&
-        this.editor.currentTool === this.editor.tools.select
-      ) {
-        this.editor.tools.select.renderHighlight(context, this.camera);
-      }
+      // Dispatch event for editor to render selection highlight
+      window.dispatchEvent(
+        new CustomEvent(GameEvents.BEFORE_RENDER, {
+          detail: { context, camera: this.camera },
+        })
+      );
     });
   }
 
@@ -643,20 +639,8 @@ export class Game {
     // Create entities via engine
     this.gameEngine.createEntities();
 
-    // Create the player
-    this.createPlayer();
-  }
-
-  createPlayer() {
-    // Create player with config
-    let playerConfig = { ...this.playerConfig };
-
-    // Apply level-specific overrides if they exist
-    if (this.levelData.overrides && this.levelData.overrides.player) {
-      playerConfig = { ...playerConfig, ...this.levelData.overrides.player };
-    }
-
-    this.player = new Player(playerConfig, this.world);
+    // Create the player via engine
+    this.gameEngine.createPlayer();
   }
 
   setupEvents() {
@@ -698,17 +682,14 @@ export class Game {
       // Ctrl+D can always be used to toggle the panel
       if ((e.key === "d" || e.key === "D") && e.ctrlKey) {
         e.preventDefault(); // Prevent browser bookmark dialog
-        const infoPanel = document.getElementById("info");
-        const isHidden =
-          infoPanel.style.display === "none" || !infoPanel.style.display;
+        const wasHidden = !this.debug.isVisible;
+        this.debug.toggle();
 
-        if (isHidden) {
+        if (wasHidden) {
           // Showing panel - restore debug settings
-          infoPanel.style.display = "block";
           this.render.options.wireframes = this.wireframes;
         } else {
           // Hiding panel - disable visual debug features but preserve settings
-          infoPanel.style.display = "none";
           this.render.options.wireframes = false;
           // Reset zoom to level config default
           this.camera.setZoom(this.levelData.zoom || 1);
@@ -720,17 +701,13 @@ export class Game {
       // Ctrl+I can always be used to toggle editor mode
       if ((e.key === "i" || e.key === "I") && e.ctrlKey) {
         e.preventDefault();
-        if (this.editor) {
-          this.editor.toggle();
-        }
+        // Dispatch event for editor to listen to
+        window.dispatchEvent(new CustomEvent(GameEvents.TOGGLE_EDITOR));
         return;
       }
 
       // Check if info panel is visible for all other shortcuts
-      const infoPanel = document.getElementById("info");
-      const isPanelVisible = infoPanel.style.display !== "none";
-
-      if (!isPanelVisible) {
+      if (!this.debug.isVisible) {
         // If panel is hidden, ignore all other shortcuts
         return;
       }
@@ -805,19 +782,13 @@ export class Game {
   }
 
   toggleInfoPanel() {
-    const infoContent = document.getElementById("info-content");
-    const infoHeader = document.getElementById("info-header");
-    const isCollapsed = infoContent.style.display === "none";
-
-    infoContent.style.display = isCollapsed ? "block" : "none";
-    infoHeader.innerHTML = isCollapsed
-      ? "<strong>▼ Controls & Info</strong>"
-      : "<strong>▶ Controls & Info</strong>";
+    this.debug.toggleContent();
   }
 
   updateDebugStatus() {
-    document.getElementById("debug-status").textContent =
-      `Debug Labels: ${this.debugLabels ? "ON" : "OFF"} | Wireframes: ${this.wireframes ? "ON" : "OFF"} | Zoom: ${this.camera.zoom.toFixed(2)}x`;
+    this.debug.updateDebugStatus(
+      `Debug Labels: ${this.debugLabels ? "ON" : "OFF"} | Wireframes: ${this.wireframes ? "ON" : "OFF"} | Zoom: ${this.camera.zoom.toFixed(2)}x`
+    );
   }
 
   updateZoom() {
@@ -846,21 +817,27 @@ export class Game {
     // Hide game over dialog first
     this.hideGameOver();
 
-    // If editor exists and has default state, restore it
-    if (this.editor && this.editor.defaultState) {
-      this.editor.restoreState(this.editor.defaultState);
-      return;
-    }
+    // Dispatch event to allow editor to handle reset
+    const resetEvent = new CustomEvent(GameEvents.REQUEST_RESET, {
+      detail: { handled: false },
+    });
+    window.dispatchEvent(resetEvent);
 
-    // Otherwise do standard reset
-    const { World } = Matter;
-    World.clear(this.world);
-    this.engine.world = this.world;
-    this.createWorld();
-    this.createPlayer();
-    this.camera.setTarget(this.player.body);
-    this.camera.x = 0;
-    this.camera.y = 0;
+    // If editor didn't handle it, do standard reset
+    // Use setTimeout to allow event handlers to respond
+    setTimeout(() => {
+      if (!resetEvent.detail.handled) {
+        // Standard reset
+        const { World } = Matter;
+        World.clear(this.world);
+        this.engine.world = this.world;
+        this.createWorld();
+        this.createPlayer();
+        this.camera.setTarget(this.player.body);
+        this.camera.x = 0;
+        this.camera.y = 0;
+      }
+    }, 0);
   }
 
   async switchLevel(levelUrl = null) {
@@ -889,10 +866,7 @@ export class Game {
   }
 
   updateCamera() {
-    // Update player based on input (only if input is not disabled)
-    if (this.player && !this.inputDisabled) {
-      this.player.update(this.input);
-    }
+    // Player is now updated by Engine in gameLoop
 
     // Update camera to follow player
     this.camera.update();
@@ -903,27 +877,20 @@ export class Game {
     // Update UI
     if (this.player && !this.player.isDestroyed) {
       const playerPos = this.player.getPosition();
-      document.getElementById("camera-pos").textContent =
-        `Camera: (${Math.round(this.camera.x)}, ${Math.round(this.camera.y)}) | Player: (${Math.round(playerPos.x)}, ${Math.round(playerPos.y)}) | Health: ${this.player.health}/${this.player.maxHealth}`;
+      this.debug.updateCameraPos(
+        `Camera: (${Math.round(this.camera.x)}, ${Math.round(this.camera.y)}) | Player: (${Math.round(playerPos.x)}, ${Math.round(playerPos.y)}) | Health: ${this.player.health}/${this.player.maxHealth}`
+      );
     } else if (this.player && this.player.isDestroyed) {
-      document.getElementById("camera-pos").textContent =
-        `Player Destroyed! Press R to reset.`;
+      this.debug.updateCameraPos("Player Destroyed! Press R to reset.");
     }
   }
 
   gameLoop() {
     this.updateCamera();
 
-    // Check if debug panel is visible
-    const infoPanel = document.getElementById("info");
-    const isPanelVisible = infoPanel && infoPanel.style.display !== "none";
-
-    // Update trigger visibility and state via engine
+    // Update engine (handles player, triggers, clouds)
     if (this.gameEngine) {
-      this.gameEngine.triggers.forEach((trigger) => {
-        trigger.body.render.visible = isPanelVisible;
-      });
-      this.gameEngine.update(this.player);
+      this.gameEngine.update();
     }
 
     requestAnimationFrame(() => this.gameLoop());

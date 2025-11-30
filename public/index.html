@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Matter.js 2D Game with Camera</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
       body {
         margin: 0;
@@ -19,17 +21,6 @@
         display: block;
         max-width: 100%;
         max-height: 100%;
-      }
-      #info {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        color: white;
-        background: rgba(0, 0, 0, 0.7);
-        padding: 15px;
-        border-radius: 5px;
-        font-size: 14px;
-        z-index: 10;
       }
       #info div {
         margin: 5px 0;
@@ -48,31 +39,8 @@
       #reset-button:active {
         transform: scale(0.95);
       }
-      .editor-btn {
-        padding: 8px 20px;
-        font-size: 14px;
-        background: #3498db;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        font-weight: bold;
-        user-select: none;
-      }
       .editor-btn:hover {
         background: #2980b9;
-      }
-      .editor-tool-btn {
-        padding: 10px;
-        font-size: 13px;
-        background: #3498db;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        font-weight: bold;
-        text-align: left;
-        user-select: none;
       }
       .editor-tool-btn:hover {
         background: #2980b9;
@@ -96,93 +64,6 @@
     </style>
   </head>
   <body>
-    <div id="info" style="display: none">
-      <div
-        id="info-header"
-        style="
-          cursor: pointer;
-          user-select: none;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-          padding-bottom: 5px;
-          margin-bottom: 5px;
-        "
-      >
-        <strong>▼ Controls & Info</strong>
-      </div>
-      <div id="info-content">
-        <div><strong>Controls:</strong></div>
-        <div>Arrow Keys or WASD - Move Player</div>
-        <div>Space or W/Up - Jump</div>
-        <div>R - Reset World</div>
-        <div>L - Load Level (JSON)</div>
-        <div>G - Load Game Config (JSON)</div>
-        <div>P - Load Player Config (JSON)</div>
-        <div>Ctrl+D - Toggle This Panel</div>
-        <div>Ctrl+I - Toggle Editor Mode</div>
-        <div>Ctrl+L - Toggle Debug Labels</div>
-        <div>Ctrl+Y - Toggle Wireframes</div>
-        <div>Mouse Wheel - Zoom In/Out</div>
-        <div><strong>Test Controls:</strong></div>
-        <div>1 - Damage Player (10 HP)</div>
-        <div>2 - Heal Player (10 HP)</div>
-      </div>
-      <div
-        id="info-status"
-        style="
-          border-top: 1px solid rgba(255, 255, 255, 0.3);
-          padding-top: 5px;
-          margin-top: 5px;
-        "
-      >
-        <div id="camera-pos">
-          Camera: (0, 0) | Player: (0, 0) | Health: 100/100
-        </div>
-        <div id="debug-status">
-          Debug Labels: OFF | Wireframes: OFF | Zoom: 1.00x
-        </div>
-      </div>
-    </div>
-
-    <div
-      id="game-over-dialog"
-      style="
-        display: none;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.9);
-        color: white;
-        padding: 40px;
-        border-radius: 10px;
-        text-align: center;
-        z-index: 100;
-        border: 2px solid #e74c3c;
-      "
-    >
-      <h1 style="margin: 0 0 20px 0; color: #e74c3c; font-size: 48px">
-        GAME OVER
-      </h1>
-      <p style="margin: 0 0 30px 0; font-size: 18px">
-        You fell out of the world!
-      </p>
-      <button
-        id="reset-button"
-        style="
-          padding: 15px 40px;
-          font-size: 18px;
-          background: #e74c3c;
-          color: white;
-          border: none;
-          border-radius: 5px;
-          cursor: pointer;
-          font-weight: bold;
-        "
-      >
-        RESET GAME
-      </button>
-    </div>
-
     <input
       type="file"
       id="levelFileInput"

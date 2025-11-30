@@ -1,10 +1,13 @@
-import { SelectTool } from "./tools/select-tool.js";
-import { EntityTool } from "./tools/entity-tool.js";
-import { DeleteTool } from "./tools/delete-tool.js";
+import { SelectTool } from "./ui/tools/select-tool.js";
+import { EntityTool } from "./ui/tools/entity-tool.js";
+import { DeleteTool } from "./ui/tools/delete-tool.js";
 import { Entity } from "../game/entity/entity.js";
 import { Player } from "../game/entity/player/player.js";
 import { Cloud } from "../game/entity/cloud.js";
 import { Trigger } from "../game/entity/trigger.js";
+import { EditorUI } from "./ui/editor-ui.js";
+import { GameEvents } from "../events/game-events.js";
+import { Styles } from "../styles/styles.js";
 import Matter from "matter-js";
 
 export class Editor {
@@ -20,13 +23,9 @@ export class Editor {
     this.cameraStartX = 0;
     this.cameraStartY = 0;
 
-    // Toolbar widths and expansion state
+    // Toolbar widths
     this.leftToolbarDefaultWidth = 180;
     this.rightToolbarDefaultWidth = 220;
-    this.leftToolbarWidth = this.leftToolbarDefaultWidth;
-    this.rightToolbarWidth = this.rightToolbarDefaultWidth;
-    this.leftExpanded = false;
-    this.rightExpanded = false;
 
     // State management
     this.defaultState = null; // The default state to revert to
@@ -44,124 +43,53 @@ export class Editor {
     this.currentTool = this.tools.select;
     this.currentTool.activate();
 
-    this.createEditorUI();
+    // Create EditorUI
+    this.ui = new EditorUI(this);
+    this.ui.create();
+
     this.setupMouseNavigation();
-    this.setupExpandButtons();
-    this.setupToolListeners();
+    this.setupGameEventListeners();
   }
 
-  createEditorUI() {
-    // Create editor overlay container
-    this.editorContainer = document.createElement("div");
-    this.editorContainer.id = "editor-container";
-    this.editorContainer.style.cssText = `
-                    display: none;
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    z-index: 200;
-                    pointer-events: none;
-                `;
+  setupGameEventListeners() {
+    // Listen for toggle editor event
+    window.addEventListener(GameEvents.TOGGLE_EDITOR, () => {
+      this.toggle();
+    });
 
-    // Create top toolbar
-    this.topToolbar = document.createElement("div");
-    this.topToolbar.id = "editor-top-toolbar";
-    this.topToolbar.style.cssText = `
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 60px;
-                    background: rgba(30, 30, 30, 0.95);
-                    border-bottom: 2px solid #3498db;
-                    pointer-events: all;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 0 20px;
-                    gap: 15px;
-                `;
-    this.topToolbar.innerHTML = `
-                    <button class="editor-btn" id="editor-revert-btn" style="background: #9b59b6;">Reset</button>
-                    <button class="editor-btn" id="editor-save-btn">Save</button>
-                    <button class="editor-btn" id="editor-load-btn">Load</button>
-                    <button class="editor-btn" id="editor-exit-btn" style="background: #e74c3c;">Exit</button>
-                `;
+    // Listen for reset request
+    window.addEventListener(GameEvents.REQUEST_RESET, (e) => {
+      if (this.defaultState) {
+        // Handle the reset
+        this.restoreState(this.defaultState);
+        e.detail.handled = true;
+      }
+    });
 
-    // Create left toolbar
-    this.leftToolbar = document.createElement("div");
-    this.leftToolbar.id = "editor-left-toolbar";
-    this.leftToolbar.style.cssText = `
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    bottom: 20px;
-                    width: ${this.leftToolbarWidth}px;
-                    background: rgba(30, 30, 30, 0.95);
-                    border-right: 2px solid #3498db;
-                    border-bottom: 2px solid #3498db;
-                    border-bottom-right-radius: 8px;
-                    pointer-events: all;
-                    overflow-y: auto;
-                    padding: 15px;
-                    color: white;
-                `;
-    this.leftToolbar.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <h3 style="margin: 0; font-size: 16px;">Tools</h3>
-                        <button id="left-expand-btn" style="background: #3498db; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">▶</button>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                        <button class="editor-tool-btn" id="tool-select">Select</button>
-                        <button class="editor-tool-btn" id="tool-entity">Add Entity</button>
-                        <button class="editor-tool-btn" id="tool-delete">Delete</button>
-                    </div>
-                `;
-
-    // Create right toolbar
-    this.rightToolbar = document.createElement("div");
-    this.rightToolbar.id = "editor-right-toolbar";
-    this.rightToolbar.style.cssText = `
-                    position: absolute;
-                    top: 0;
-                    right: 0;
-                    bottom: 20px;
-                    width: ${this.rightToolbarWidth}px;
-                    background: rgba(30, 30, 30, 0.95);
-                    border-left: 2px solid #3498db;
-                    border-bottom: 2px solid #3498db;
-                    border-bottom-left-radius: 8px;
-                    pointer-events: all;
-                    overflow-y: auto;
-                    padding: 15px;
-                    padding-bottom: 300px;
-                    color: white;
-                `;
-    this.rightToolbar.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <button id="right-expand-btn" style="background: #3498db; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">◀</button>
-                        <h3 style="margin: 0; font-size: 16px; text-align: right;">Properties</h3>
-                    </div>
-                    <div id="editor-properties">
-                        <p style="color: #aaa; font-size: 13px;">Select an object to edit properties</p>
-                    </div>
-                `;
-
-    // Append toolbars to container
-    this.editorContainer.appendChild(this.topToolbar);
-    this.editorContainer.appendChild(this.leftToolbar);
-    this.editorContainer.appendChild(this.rightToolbar);
-
-    // Append to body
-    document.body.appendChild(this.editorContainer);
-
-    // Add event listeners
-    this.setupEventListeners();
+    // Listen for render events to draw selection highlight
+    window.addEventListener(GameEvents.BEFORE_RENDER, (e) => {
+      if (this.isActive && this.currentTool === this.tools.select) {
+        this.tools.select.renderHighlight(e.detail.context, e.detail.camera);
+      }
+    });
   }
 
-  setupEventListeners() {
+  async initialize() {
+    // Wait for next frame to ensure game is fully initialized
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        if (this.game.player) {
+          this.saveWorkingState();
+          resolve();
+        } else {
+          console.error("Player was not created - cannot save initial state");
+          resolve();
+        }
+      });
+    });
+  }
+
+  setupMouseNavigation() {
     // Reset button
 
     // Exit button
@@ -267,21 +195,13 @@ export class Editor {
       this.currentTool.deactivate();
     }
 
-    // Remove active class from all tool buttons
-    document.querySelectorAll(".editor-tool-btn").forEach((btn) => {
-      btn.style.background = "#3498db";
-    });
-
     // Activate new tool
     if (this.tools[toolName]) {
       this.currentTool = this.tools[toolName];
       this.currentTool.activate();
 
-      // Add active class to selected tool button
-      const selectedBtn = document.getElementById(`tool-${toolName}`);
-      if (selectedBtn) {
-        selectedBtn.style.background = "#2ecc71";
-      }
+      // Update button highlighting via UI
+      this.ui.updateToolButtonHighlight(toolName);
     }
   }
 
@@ -837,8 +757,8 @@ export class Editor {
           }
         } else {
           collisionPropertiesContainer.style.display = "none";
-          // Set collision group to -1 to bypass all Matter.js collisions
-          entity.body.collisionFilter.group = -1;
+          // Set mask to 0 to prevent collision with everything
+          entity.body.collisionFilter.mask = 0;
         }
 
         // Update working state so changes persist
@@ -1001,29 +921,13 @@ export class Editor {
 
     groups.forEach((groupName, index) => {
       const groupItem = document.createElement("div");
-      groupItem.style.cssText = `
-                        display: flex;
-                        align-items: center;
-                        gap: 4px;
-                        margin-bottom: 4px;
-                        padding: 4px;
-                        background: rgba(255, 255, 255, 0.05);
-                        border-radius: 3px;
-                    `;
+      groupItem.style.cssText = Styles.collisionGroupItem;
 
       const input = document.createElement("input");
       input.type = "text";
       input.value = groupName;
       input.placeholder = "Group name";
-      input.style.cssText = `
-                        flex: 1;
-                        background: #2c3e50;
-                        color: white;
-                        border: 1px solid #555;
-                        padding: 4px 8px;
-                        border-radius: 3px;
-                        font-size: 11px;
-                    `;
+      input.style.cssText = Styles.collisionGroupInput;
 
       input.addEventListener("input", (e) => {
         groups[index] = e.target.value;
@@ -1034,17 +938,7 @@ export class Editor {
 
       const removeBtn = document.createElement("button");
       removeBtn.textContent = "×";
-      removeBtn.style.cssText = `
-                        background: #e74c3c;
-                        color: white;
-                        border: none;
-                        padding: 4px 8px;
-                        border-radius: 3px;
-                        cursor: pointer;
-                        font-size: 14px;
-                        font-weight: bold;
-                        line-height: 1;
-                    `;
+      removeBtn.style.cssText = Styles.collisionGroupRemoveButton;
 
       removeBtn.addEventListener("click", () => {
         groups.splice(index, 1);
@@ -1067,16 +961,139 @@ export class Editor {
     }
   }
 
+  renderHierarchy() {
+    const hierarchyContent = document.getElementById("hierarchy-tab-content");
+    if (!hierarchyContent) return;
+
+    // Clear current content
+    hierarchyContent.innerHTML = "";
+
+    // Group entities by type
+    const groups = {
+      player: [],
+      entity: [],
+      cloud: [],
+      trigger: [],
+    };
+
+    // Add player
+    if (this.game.player) {
+      groups.player.push(this.game.player);
+    }
+
+    // Add all entities and categorize by type
+    this.game.entities.forEach((entity) => {
+      const type = entity.config.entityType || "entity";
+      if (groups[type]) {
+        groups[type].push(entity);
+      } else {
+        groups.entity.push(entity);
+      }
+    });
+
+    // Render each group
+    Object.entries(groups).forEach(([groupName, entities]) => {
+      if (entities.length === 0) return;
+
+      // Create group container
+      const groupDiv = document.createElement("div");
+      groupDiv.style.cssText = Styles.hierarchyGroup;
+
+      // Create group header
+      const groupHeader = document.createElement("div");
+      groupHeader.style.cssText = Styles.hierarchyGroupHeader;
+      groupHeader.textContent = `▼ ${groupName.charAt(0).toUpperCase() + groupName.slice(1)} (${entities.length})`;
+
+      // Create group content
+      const groupContent = document.createElement("div");
+      groupContent.style.cssText = Styles.hierarchyGroupContent;
+
+      // Add entity items
+      entities.forEach((entity) => {
+        const itemDiv = document.createElement("div");
+        itemDiv.style.cssText = Styles.hierarchyItem;
+        itemDiv.textContent = entity.config.label || "Unnamed";
+
+        // Hover effect
+        itemDiv.addEventListener("mouseenter", () => {
+          itemDiv.style.cssText = Styles.hierarchyItemHover;
+        });
+        itemDiv.addEventListener("mouseleave", () => {
+          itemDiv.style.cssText = Styles.hierarchyItem;
+        });
+
+        // Single click - select and show properties
+        itemDiv.addEventListener("click", () => {
+          // Switch to select tool
+          this.selectTool("select");
+
+          // Select the entity
+          if (this.tools.select) {
+            this.tools.select.selectedEntity = entity;
+            this.updatePropertiesPanel();
+          }
+        });
+
+        // Double click - center camera and show properties
+        let clickCount = 0;
+        let clickTimer = null;
+        itemDiv.addEventListener("click", () => {
+          clickCount++;
+          if (clickCount === 1) {
+            clickTimer = setTimeout(() => {
+              clickCount = 0;
+            }, 300);
+          } else if (clickCount === 2) {
+            clearTimeout(clickTimer);
+            clickCount = 0;
+
+            // Switch to select tool
+            this.selectTool("select");
+
+            // Center camera on entity
+            this.game.camera.x = entity.body.position.x;
+            this.game.camera.y = entity.body.position.y;
+
+            // Select and show properties
+            if (this.tools.select) {
+              this.tools.select.selectedEntity = entity;
+              this.tools.select.setTransformMode("move"); // Activate move widget
+              this.updatePropertiesPanel();
+            }
+          }
+        });
+
+        groupContent.appendChild(itemDiv);
+      });
+
+      // Toggle group expand/collapse
+      let expanded = true;
+      groupHeader.addEventListener("click", () => {
+        expanded = !expanded;
+        groupContent.style.display = expanded ? "flex" : "none";
+        groupHeader.textContent = `${expanded ? "▼" : "▶"} ${groupName.charAt(0).toUpperCase() + groupName.slice(1)} (${entities.length})`;
+      });
+
+      groupDiv.appendChild(groupHeader);
+      groupDiv.appendChild(groupContent);
+      hierarchyContent.appendChild(groupDiv);
+    });
+  }
+
   toggle() {
     // Check current actual display state to handle initial hidden state
     const currentlyHidden =
-      this.editorContainer.style.display === "none" ||
-      !this.editorContainer.style.display;
+      this.ui.container.style.display === "none" ||
+      !this.ui.container.style.display;
 
     // Set isActive based on what we want (opposite of current state)
     this.isActive = currentlyHidden;
 
-    this.editorContainer.style.display = this.isActive ? "block" : "none";
+    if (this.isActive) {
+      this.ui.show();
+    } else {
+      this.ui.hide();
+    }
 
     const canvas = this.game.render.canvas;
 
@@ -1086,16 +1103,8 @@ export class Editor {
       this.game.pauseSimulation();
       canvas.style.cursor = "grab";
 
-      // Reset all tool buttons to default color
-      document.querySelectorAll(".editor-tool-btn").forEach((btn) => {
-        btn.style.background = "#3498db";
-      });
-
-      // Highlight only the select tool button (default active tool)
-      const selectBtn = document.getElementById("tool-select");
-      if (selectBtn) {
-        selectBtn.style.background = "#2ecc71";
-      }
+      // Highlight select tool (default)
+      this.ui.updateToolButtonHighlight("select");
     } else {
       // Exiting editor mode - apply working state as new default and restart
       this.applyWorkingState();
@@ -1107,154 +1116,17 @@ export class Editor {
 
   show() {
     this.isActive = true;
-    this.editorContainer.style.display = "block";
+    this.ui.show();
     this.game.pauseSimulation();
     this.game.render.canvas.style.cursor = "grab";
   }
 
   hide() {
     this.isActive = false;
-    this.editorContainer.style.display = "none";
+    this.ui.hide();
     this.game.resumeSimulation();
     this.game.render.canvas.style.cursor = "default";
     this.isDragging = false;
-  }
-
-  setupExpandButtons() {
-    // Left expand button
-    const leftExpandBtn = document.getElementById("left-expand-btn");
-    if (leftExpandBtn) {
-      leftExpandBtn.addEventListener("click", () => {
-        this.toggleLeftToolbar();
-      });
-    }
-
-    // Right expand button
-    const rightExpandBtn = document.getElementById("right-expand-btn");
-    if (rightExpandBtn) {
-      rightExpandBtn.addEventListener("click", () => {
-        this.toggleRightToolbar();
-      });
-    }
-  }
-
-  toggleLeftToolbar() {
-    const leftExpandBtn = document.getElementById("left-expand-btn");
-    if (this.leftExpanded) {
-      // Collapse to default width
-      this.leftToolbarWidth = this.leftToolbarDefaultWidth;
-      this.leftExpanded = false;
-      if (leftExpandBtn) leftExpandBtn.textContent = "▶";
-    } else {
-      // Expand to center of screen
-      this.leftToolbarWidth = window.innerWidth / 2;
-      this.leftExpanded = true;
-      if (leftExpandBtn) leftExpandBtn.textContent = "◀";
-    }
-    this.leftToolbar.style.width = `${this.leftToolbarWidth}px`;
-  }
-
-  toggleRightToolbar() {
-    const rightExpandBtn = document.getElementById("right-expand-btn");
-    if (this.rightExpanded) {
-      // Collapse to default width
-      this.rightToolbarWidth = this.rightToolbarDefaultWidth;
-      this.rightExpanded = false;
-      if (rightExpandBtn) rightExpandBtn.textContent = "◀";
-    } else {
-      // Expand to center of screen
-      this.rightToolbarWidth = window.innerWidth / 2;
-      this.rightExpanded = true;
-      if (rightExpandBtn) rightExpandBtn.textContent = "▶";
-    }
-    this.rightToolbar.style.width = `${this.rightToolbarWidth}px`;
-  }
-
-  setupToolListeners() {
-    const canvas = this.game.render.canvas;
-
-    // Setup Revert to Default button
-    const revertBtn = document.getElementById("editor-revert-btn");
-    if (revertBtn) {
-      revertBtn.addEventListener("click", () => {
-        this.revertToDefault();
-        // Visual feedback
-        revertBtn.textContent = "Reset!";
-        revertBtn.style.background = "#27ae60";
-        setTimeout(() => {
-          revertBtn.textContent = "Reset";
-          revertBtn.style.background = "#9b59b6";
-        }, 1000);
-      });
-    }
-
-    // Setup save button
-    const saveBtn = document.getElementById("editor-save-btn");
-    if (saveBtn) {
-      saveBtn.addEventListener("click", () => {
-        this.showSaveDialog();
-      });
-    }
-
-    // Setup load button
-    const loadBtn = document.getElementById("editor-load-btn");
-    if (loadBtn) {
-      loadBtn.addEventListener("click", () => {
-        this.showLoadDialog();
-      });
-    }
-
-    // Prevent default context menu when in editor mode
-    canvas.addEventListener("contextmenu", (e) => {
-      if (this.isActive) {
-        e.preventDefault();
-      }
-    });
-
-    canvas.addEventListener("mousedown", (e) => {
-      if (!this.isActive || this.isDragging) return;
-
-      // Don't trigger tool events if clicking on context menu
-      if (
-        e.target.closest("#entity-context-menu") ||
-        e.target.closest("#select-context-menu")
-      )
-        return;
-
-      const rect = canvas.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
-      const worldPos = this.currentTool.screenToWorld(screenX, screenY);
-
-      this.currentTool.onMouseDown(e, worldPos);
-    });
-
-    canvas.addEventListener("mousemove", (e) => {
-      if (!this.isActive) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
-      const worldPos = this.currentTool.screenToWorld(screenX, screenY);
-
-      this.currentTool.onMouseMove(e, worldPos);
-    });
-
-    canvas.addEventListener("mouseup", (e) => {
-      if (!this.isActive) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
-      const worldPos = this.currentTool.screenToWorld(screenX, screenY);
-
-      this.currentTool.onMouseUp(e, worldPos);
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if (!this.isActive) return;
-      this.currentTool.onKeyDown(e);
-    });
   }
 
   saveInitialState() {
@@ -1336,6 +1208,11 @@ export class Editor {
   updateWorkingState() {
     // Update the working state with current game state
     this.saveWorkingState();
+
+    // Refresh hierarchy if on hierarchy tab
+    if (this.ui.leftToolbar.currentTab === "hierarchy") {
+      this.renderHierarchy();
+    }
   }
 
   applyWorkingState() {
@@ -1409,6 +1286,12 @@ export class Editor {
         if (this.game.gameEngine && this.game.gameEngine.clouds) {
           this.game.gameEngine.clouds.push(entity);
         }
+      } else if (savedEntity.config.entityType === "trigger") {
+        entity = new Trigger(savedEntity.config, this.game.world);
+        // Add to triggers array
+        if (this.game.gameEngine && this.game.gameEngine.triggers) {
+          this.game.gameEngine.triggers.push(entity);
+        }
       } else {
         entity = new Entity(savedEntity.config, this.game.world);
       }
@@ -1446,18 +1329,7 @@ export class Editor {
   showSaveDialog() {
     // Create a modal dialog for save options
     const dialog = document.createElement("div");
-    dialog.style.cssText = `
-                    position: fixed;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    background: rgba(30, 30, 30, 0.98);
-                    border: 2px solid #3498db;
-                    border-radius: 8px;
-                    padding: 20px;
-                    z-index: 10000;
-                    min-width: 300px;
-                `;
+    dialog.style.cssText = Styles.modalDialog;
 
     dialog.innerHTML = `
                     <h3 style="margin-top: 0; color: #3498db;">Save Level</h3>
@@ -1496,18 +1368,7 @@ export class Editor {
   showLoadDialog() {
     // Create a modal dialog for load options
     const dialog = document.createElement("div");
-    dialog.style.cssText = `
-                    position: fixed;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    background: rgba(30, 30, 30, 0.98);
-                    border: 2px solid #3498db;
-                    border-radius: 8px;
-                    padding: 20px;
-                    z-index: 10000;
-                    min-width: 300px;
-                `;
+    dialog.style.cssText = Styles.modalDialog;
 
     dialog.innerHTML = `
                     <h3 style="margin-top: 0; color: #3498db;">Load Config</h3>

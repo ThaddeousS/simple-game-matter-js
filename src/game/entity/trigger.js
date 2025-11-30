@@ -49,6 +49,11 @@ export class Trigger extends Entity {
   }
 
   update() {
+    // Update visibility based on debug panel state
+    const infoPanel = document.getElementById("info");
+    const isPanelVisible = infoPanel && infoPanel.style.display !== "none";
+    this.body.render.visible = isPanelVisible;
+
     // Call onStay for all entities currently inside
     if (this.onStay && typeof this.onStay === "function") {
       this.entitiesInside.forEach((body) => {

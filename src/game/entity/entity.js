@@ -107,8 +107,8 @@ export class Entity {
 
     // Handle collision enabled/disabled state
     if (this.config.collisionsEnabled === false) {
-      // Collisions disabled: set collision group to -1 to bypass all collision detection
-      this.body.collisionFilter.group = -1;
+      // Collisions disabled: set mask to 0 to prevent collision with everything
+      this.body.collisionFilter.mask = 0;
     } else {
       // Collisions enabled: set default collision filter (0 = default collisions)
       this.body.collisionFilter.group = 0;

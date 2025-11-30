@@ -41,6 +41,12 @@ export class Cloud extends Entity {
 
   update(entities, player) {
     // This method will be called by the game engine to update collision state
+
+    // If collisions are disabled, don't update sensor state
+    if (this.config.collisionsEnabled === false) {
+      return;
+    }
+
     const bodiesToCheck = [];
 
     // Add player if exists

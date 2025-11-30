@@ -1,5 +1,7 @@
 import { Tool } from "./tool.js";
-import { Entity } from "../../game/entity/entity.js";
+import { Entity } from "../../../game/entity/entity.js";
+import { Cloud } from "../../../game/entity/cloud.js";
+import { Styles } from "../../../styles/styles.js";
 
 export class EntityTool extends Tool {
   constructor(editor) {
@@ -102,17 +104,7 @@ export class EntityTool extends Tool {
   createContextMenu() {
     this.contextMenu = document.createElement("div");
     this.contextMenu.id = "entity-context-menu";
-    this.contextMenu.style.cssText = `
-                    display: none;
-                    position: absolute;
-                    background: rgba(30, 30, 30, 0.98);
-                    border: 2px solid #3498db;
-                    border-radius: 5px;
-                    padding: 5px;
-                    z-index: 1000;
-                    min-width: 180px;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-                `;
+    this.contextMenu.style.cssText = Styles.contextMenuEntity;
     document.body.appendChild(this.contextMenu);
 
     // Close menu when clicking elsewhere (but not on canvas during entity tool)
@@ -140,41 +132,18 @@ export class EntityTool extends Tool {
 
     // Add header
     const header = document.createElement("div");
-    header.style.cssText = `
-                    color: white;
-                    font-weight: bold;
-                    font-size: 12px;
-                    padding: 5px 10px;
-                    border-bottom: 1px solid #3498db;
-                    margin-bottom: 5px;
-                `;
+    header.style.cssText = Styles.contextMenuHeaderBlue;
     header.textContent = "Select Entity Type";
     this.contextMenu.appendChild(header);
 
     // Add menu items for each entity type
     this.entityTypes.forEach((type) => {
       const item = document.createElement("div");
-      item.style.cssText = `
-                        color: white;
-                        padding: 8px 10px;
-                        cursor: pointer;
-                        font-size: 13px;
-                        border-radius: 3px;
-                        user-select: none;
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                    `;
+      item.style.cssText = Styles.contextMenuItem;
 
       // Add color indicator
       const colorBox = document.createElement("div");
-      colorBox.style.cssText = `
-                        width: 12px;
-                        height: 12px;
-                        background: ${type.color};
-                        border-radius: ${type.shape === "circle" ? "50%" : "2px"};
-                        border: 1px solid rgba(255, 255, 255, 0.3);
-                    `;
+      colorBox.style.cssText = `${Styles.entityColorBox} background: ${type.color}; border-radius: ${type.shape === "circle" ? "50%" : "2px"};`;
 
       item.appendChild(colorBox);
       item.appendChild(document.createTextNode(type.name));

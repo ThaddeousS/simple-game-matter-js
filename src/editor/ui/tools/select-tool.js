@@ -3,6 +3,7 @@ import Matter from "matter-js";
 import { MoveTool } from "./move-tool.js";
 import { RotateTool } from "./rotate-tool.js";
 import { ScaleTool } from "./scale-tool.js";
+import { Styles } from "../../../styles/styles.js";
 
 export class SelectTool extends Tool {
   constructor(editor) {
@@ -19,17 +20,7 @@ export class SelectTool extends Tool {
   createContextMenu() {
     this.contextMenu = document.createElement("div");
     this.contextMenu.id = "select-context-menu";
-    this.contextMenu.style.cssText = `
-                    display: none;
-                    position: absolute;
-                    background: rgba(30, 30, 30, 0.98);
-                    border: 2px solid #ffff00;
-                    border-radius: 5px;
-                    padding: 5px;
-                    z-index: 1000;
-                    min-width: 150px;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-                `;
+    this.contextMenu.style.cssText = Styles.contextMenu;
     document.body.appendChild(this.contextMenu);
 
     document.addEventListener("mousedown", (e) => {
@@ -51,14 +42,7 @@ export class SelectTool extends Tool {
     this.contextMenu.innerHTML = "";
 
     const header = document.createElement("div");
-    header.style.cssText = `
-                    color: white;
-                    font-weight: bold;
-                    font-size: 12px;
-                    padding: 5px 10px;
-                    border-bottom: 1px solid #ffff00;
-                    margin-bottom: 5px;
-                `;
+    header.style.cssText = Styles.contextMenuHeader;
     header.textContent = "Transform Mode";
     this.contextMenu.appendChild(header);
 
@@ -70,25 +54,10 @@ export class SelectTool extends Tool {
 
     modes.forEach((modeData) => {
       const item = document.createElement("div");
-      item.style.cssText = `
-                        color: white;
-                        padding: 8px 10px;
-                        cursor: pointer;
-                        font-size: 13px;
-                        border-radius: 3px;
-                        user-select: none;
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                        background: ${this.transformMode === modeData.mode ? "#ffff0033" : "transparent"};
-                    `;
+      item.style.cssText = `${Styles.contextMenuItem} background: ${this.transformMode === modeData.mode ? "#ffff0033" : "transparent"};`;
 
       const icon = document.createElement("span");
-      icon.style.cssText = `
-                        font-size: 16px;
-                        width: 20px;
-                        text-align: center;
-                    `;
+      icon.style.cssText = Styles.contextMenuIcon;
       icon.textContent = modeData.icon;
 
       item.appendChild(icon);

@@ -1,17 +1,56 @@
 import { Trigger } from "../entity/trigger";
 import { Entity } from "../entity/entity";
 import { Cloud } from "../entity/cloud";
+import { Player } from "../entity/player/player";
+import { InputHandler } from "../../input/input-handler.js";
 import Matter from "matter-js";
 
 export class Engine {
-  constructor(matterEngine, matterWorld, levelData, worldInstance) {
+  constructor(
+    matterEngine,
+    matterWorld,
+    levelData,
+    worldInstance,
+    playerConfig
+  ) {
     this.matterEngine = matterEngine; // Matter.js engine
     this.matterWorld = matterWorld; // Matter.js world
     this.levelData = levelData;
     this.worldInstance = worldInstance; // Our World class instance
+    this.playerConfig = playerConfig;
     this.entities = [];
     this.triggers = [];
     this.clouds = [];
+    this.player = null;
+    this.input = null;
+    this.inputEnabled = true; // Control whether input affects player
+    this.onPlayerKilled = null; // Callback for when player dies
+
+    // Initialize input handler
+    this.createInput();
+  }
+
+  createInput() {
+    // Initialize input handler
+    this.input = new InputHandler();
+
+    // Bind input actions
+    this.input.bindAction("moveLeft", ["ArrowLeft", "a", "A"]);
+    this.input.bindAction("moveRight", ["ArrowRight", "d", "D"]);
+    this.input.bindAction("jump", ["ArrowUp", "w", "W", " "]);
+  }
+
+  createPlayer() {
+    // Create player with config
+    let playerConfig = { ...this.playerConfig };
+
+    // Apply level-specific overrides if they exist
+    if (this.levelData.overrides && this.levelData.overrides.player) {
+      playerConfig = { ...playerConfig, ...this.levelData.overrides.player };
+    }
+
+    this.player = new Player(playerConfig, this.matterWorld);
+    return this.player;
   }
 
   createEntities() {
@@ -51,7 +90,8 @@ export class Engine {
     }
   }
 
-  setupCollisionDetection(player, onPlayerKilled) {
+  setupCollisionDetection(onPlayerKilled) {
+    this.onPlayerKilled = onPlayerKilled; // Store callback
     const { Events } = Matter;
     const killBoxes = this.worldInstance.getKillBoxes();
 
@@ -64,10 +104,14 @@ export class Engine {
           const otherBody = killBoxes.includes(bodyA) ? bodyB : bodyA;
 
           // Check if it's the player
-          if (otherBody === player.body && !player.isDestroyed) {
+          if (
+            this.player &&
+            otherBody === this.player.body &&
+            !this.player.isDestroyed
+          ) {
             // Don't destroy player here - let the callback handle it
-            if (onPlayerKilled) {
-              onPlayerKilled();
+            if (this.onPlayerKilled) {
+              this.onPlayerKilled();
             }
           } else {
             // Check if it's an entity
@@ -108,28 +152,39 @@ export class Engine {
     });
   }
 
-  findEntityByBody(body, player) {
-    if (player && body === player.body) {
-      return player;
+  findEntityByBody(body) {
+    if (this.player && body === this.player.body) {
+      return this.player;
     }
     return this.entities.find((e) => e.body === body);
   }
 
-  update(player) {
+  update() {
+    // Update player with input (only if input is enabled)
+    if (this.player && this.input && this.inputEnabled) {
+      this.player.update(this.input);
+    }
+
     // Update triggers
     this.triggers.forEach((trigger) => {
-      trigger.update(this.entities, player);
+      trigger.update(this.entities, this.player);
     });
 
     // Update clouds (one-way platforms need to check entity positions)
     if (this.clouds) {
       this.clouds.forEach((cloud) => {
-        cloud.update(this.entities, player);
+        cloud.update(this.entities, this.player);
       });
     }
   }
 
   clearEntities() {
+    // Destroy player
+    if (this.player) {
+      this.player.destroy();
+      this.player = null;
+    }
+
     // Destroy all entities
     this.entities.forEach((entity) => entity.destroy());
     this.entities = [];
