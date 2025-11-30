@@ -8,6 +8,7 @@ import { Trigger } from "../game/entity/trigger.js";
 import { EditorUI } from "./ui/editor-ui.js";
 import { GameEvents } from "../events/game-events.js";
 import { Styles } from "../styles/styles.js";
+import { Liquid } from "../game/entity/liquid.js";
 import Matter from "matter-js";
 
 export class Editor {
@@ -345,7 +346,7 @@ export class Editor {
       html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
       html +=
         '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Entity Type</div>';
-      const entityTypeOptions = ["entity", "cloud", "trigger"];
+      const entityTypeOptions = ["entity", "cloud", "liquid", "trigger"];
       const currentEntityType = config.entityType || "entity";
       html += this.createPropertyInput(
         "Type",
@@ -357,6 +358,22 @@ export class Editor {
         null,
         entityTypeOptions
       );
+
+      // Viscosity property - only show for liquid entities
+      if (currentEntityType === "liquid") {
+        html += this.createPropertyInput(
+          "Viscosity",
+          "viscosity",
+          entity.viscosity !== undefined ? entity.viscosity : 0.5,
+          "number",
+          0.05,
+          0,
+          1
+        );
+        html +=
+          '<div style="color: #aaa; font-size: 10px; margin-top: -6px; margin-bottom: 6px;">0 = no resistance, 1 = maximum</div>';
+      }
+
       html += "</div>";
     }
 
@@ -801,12 +818,24 @@ export class Editor {
           }
         }
 
+        if (editor.game.gameEngine && editor.game.gameEngine.liquids) {
+          const liquidIndex = editor.game.gameEngine.liquids.indexOf(entity);
+          if (liquidIndex > -1) {
+            editor.game.gameEngine.liquids.splice(liquidIndex, 1);
+          }
+        }
+
         // Create new entity of the appropriate type
         let newEntity;
         if (newType === "cloud") {
           newEntity = new Cloud(oldConfig, editor.game.world);
           if (editor.game.gameEngine && editor.game.gameEngine.clouds) {
             editor.game.gameEngine.clouds.push(newEntity);
+          }
+        } else if (newType === "liquid") {
+          newEntity = new Liquid(oldConfig, editor.game.world);
+          if (editor.game.gameEngine && editor.game.gameEngine.liquids) {
+            editor.game.gameEngine.liquids.push(newEntity);
           }
         } else if (newType === "trigger") {
           newEntity = new Trigger(oldConfig, editor.game.world);
@@ -835,6 +864,18 @@ export class Editor {
         // Refresh properties panel
         editor.updatePropertiesPanel();
         editor.updateWorkingState();
+      });
+    }
+
+    // Viscosity (for liquid entities)
+    const viscosityInput = document.getElementById("prop-viscosity");
+    if (viscosityInput) {
+      viscosityInput.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        if (entity.viscosity !== undefined) {
+          entity.viscosity = value;
+          entity.updateConfigProperty("viscosity", value);
+        }
       });
     }
 
@@ -1275,6 +1316,11 @@ export class Editor {
       this.game.gameEngine.clouds = [];
     }
 
+    // Clear liquids array
+    if (this.game.gameEngine && this.game.gameEngine.liquids) {
+      this.game.gameEngine.liquids = [];
+    }
+
     // Recreate entities from state
     state.entities.forEach((savedEntity) => {
       let entity;
@@ -1285,6 +1331,12 @@ export class Editor {
         // Add to clouds array
         if (this.game.gameEngine && this.game.gameEngine.clouds) {
           this.game.gameEngine.clouds.push(entity);
+        }
+      } else if (savedEntity.config.entityType === "liquid") {
+        entity = new Liquid(savedEntity.config, this.game.world);
+        // Add to liquids array
+        if (this.game.gameEngine && this.game.gameEngine.liquids) {
+          this.game.gameEngine.liquids.push(entity);
         }
       } else if (savedEntity.config.entityType === "trigger") {
         entity = new Trigger(savedEntity.config, this.game.world);
@@ -1302,6 +1354,15 @@ export class Editor {
       Body.setAngularVelocity(entity.body, savedEntity.angularVelocity);
       entity.health = savedEntity.health;
       entity.isDestroyed = savedEntity.isDestroyed;
+
+      // Re-enforce sensor state for liquids and triggers after body manipulation
+      if (
+        savedEntity.config.entityType === "liquid" ||
+        savedEntity.config.entityType === "trigger"
+      ) {
+        entity.body.isSensor = true;
+      }
+
       this.game.entities.push(entity);
     });
 

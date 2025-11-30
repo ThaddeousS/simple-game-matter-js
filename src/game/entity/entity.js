@@ -21,8 +21,10 @@ export class Entity {
     this.isDestroyed = false;
 
     // Determine if this is a sensor based on entityType
-    // Triggers are always sensors (no physical collision)
-    const isSensor = this.config.entityType === "trigger";
+    // Triggers and liquids are always sensors (no physical collision)
+    const isSensor =
+      this.config.entityType === "trigger" ||
+      this.config.entityType === "liquid";
 
     // Create the physical body based on shape
     if (this.config.shape === "circle") {

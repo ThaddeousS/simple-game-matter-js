@@ -134,6 +134,7 @@ export class Game {
         height: dimensions.height,
         wireframes: this.wireframes,
         background: "#2c3e50",
+        showSensors: true, // Show sensor bodies (triggers, liquids, etc.)
       },
     });
 

@@ -21,6 +21,7 @@ export class Engine {
     this.entities = [];
     this.triggers = [];
     this.clouds = [];
+    this.liquids = [];
     this.player = null;
     this.input = null;
     this.inputEnabled = true; // Control whether input affects player
@@ -63,6 +64,7 @@ export class Engine {
     this.entities = []; // Reset entity instances
     this.triggers = []; // Reset trigger instances
     this.clouds = []; // Track cloud entities separately for updates
+    this.liquids = []; // Track liquid entities separately for updates
 
     // Create entities from the entities array
     if (level.entities) {
@@ -73,6 +75,9 @@ export class Engine {
         if (entityConfig.entityType === "cloud") {
           entity = new Cloud(entityConfig, this.matterWorld);
           this.clouds.push(entity);
+        } else if (entityConfig.entityType === "liquid") {
+          entity = new Liquid(entityConfig, this.matterWorld);
+          this.liquids.push(entity);
         } else {
           entity = new Entity(entityConfig, this.matterWorld);
         }
@@ -174,6 +179,13 @@ export class Engine {
     if (this.clouds) {
       this.clouds.forEach((cloud) => {
         cloud.update(this.entities, this.player);
+      });
+    }
+
+    // Update liquids (apply viscosity effects to entities inside)
+    if (this.liquids) {
+      this.liquids.forEach((liquid) => {
+        liquid.update(this.entities, this.player);
       });
     }
   }

@@ -2,6 +2,7 @@ import { Tool } from "./tool.js";
 import { Entity } from "../../../game/entity/entity.js";
 import { Cloud } from "../../../game/entity/cloud.js";
 import { Styles } from "../../../styles/styles.js";
+import { Liquid } from "../../../game/entity/liquid.js";
 
 export class EntityTool extends Tool {
   constructor(editor) {
@@ -59,6 +60,87 @@ export class EntityTool extends Tool {
         color: "#ffffff99",
         isStatic: true,
         entityType: "cloud",
+      },
+      {
+        name: "Water (Low)",
+        width: 200,
+        height: 100,
+        color: "#3498db66",
+        isStatic: true,
+        entityType: "liquid",
+        viscosity: 0.3,
+      },
+      {
+        name: "Water (Medium)",
+        width: 200,
+        height: 150,
+        color: "#3498db66",
+        isStatic: true,
+        entityType: "liquid",
+        viscosity: 0.3,
+      },
+      {
+        name: "Water (Deep)",
+        width: 200,
+        height: 200,
+        color: "#3498db66",
+        isStatic: true,
+        entityType: "liquid",
+        viscosity: 0.3,
+      },
+      {
+        name: "Honey (Low)",
+        width: 200,
+        height: 100,
+        color: "#f39c1299",
+        isStatic: true,
+        entityType: "liquid",
+        viscosity: 0.7,
+      },
+      {
+        name: "Honey (Medium)",
+        width: 200,
+        height: 150,
+        color: "#f39c1299",
+        isStatic: true,
+        entityType: "liquid",
+        viscosity: 0.7,
+      },
+      {
+        name: "Honey (Deep)",
+        width: 200,
+        height: 200,
+        color: "#f39c1299",
+        isStatic: true,
+        entityType: "liquid",
+        viscosity: 0.7,
+      },
+      {
+        name: "Tar (Low)",
+        width: 200,
+        height: 100,
+        color: "#2c3e5099",
+        isStatic: true,
+        entityType: "liquid",
+        viscosity: 0.95,
+      },
+      {
+        name: "Tar (Medium)",
+        width: 200,
+        height: 150,
+        color: "#2c3e5099",
+        isStatic: true,
+        entityType: "liquid",
+        viscosity: 0.95,
+      },
+      {
+        name: "Tar (Deep)",
+        width: 200,
+        height: 200,
+        color: "#2c3e5099",
+        isStatic: true,
+        entityType: "liquid",
+        viscosity: 0.95,
       },
       { name: "Circle (Small)", shape: "circle", radius: 20, color: "#e74c3c" },
       {
@@ -217,9 +299,14 @@ export class EntityTool extends Tool {
       entityConfig.isStatic = type.isStatic;
     }
 
-    // Add entityType if specified (e.g., 'cloud')
+    // Add entityType if specified (e.g., 'cloud', 'liquid')
     if (type.entityType !== undefined) {
       entityConfig.entityType = type.entityType;
+    }
+
+    // Add viscosity if specified (for liquids)
+    if (type.viscosity !== undefined) {
+      entityConfig.viscosity = type.viscosity;
     }
 
     // Create the appropriate entity type
@@ -229,6 +316,12 @@ export class EntityTool extends Tool {
       // Add to clouds array if it exists
       if (this.editor.game.gameEngine && this.editor.game.gameEngine.clouds) {
         this.editor.game.gameEngine.clouds.push(newEntity);
+      }
+    } else if (entityConfig.entityType === "liquid") {
+      newEntity = new Liquid(entityConfig, this.editor.game.world);
+      // Add to liquids array if it exists
+      if (this.editor.game.gameEngine && this.editor.game.gameEngine.liquids) {
+        this.editor.game.gameEngine.liquids.push(newEntity);
       }
     } else {
       newEntity = new Entity(entityConfig, this.editor.game.world);
