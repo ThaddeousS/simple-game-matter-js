@@ -4,7 +4,7 @@
   "description": "",
   "main": "src/index.js",
   "scripts": {
-    "dev": "webpack && webpack serve --mode development",
+    "dev": "npm run build && webpack serve --mode development",
     "build": "webpack",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
