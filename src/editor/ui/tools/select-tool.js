@@ -9,11 +9,18 @@ export class SelectTool extends Tool {
   constructor(editor) {
     super(editor, "Select");
     this.selectedEntity = null;
+    this.selectedEntities = []; // Array for multi-select
     this.highlightColor = "#ffff00";
     this.highlightWidth = 3;
     this.transformMode = "move";
     this.contextMenu = null;
     this.currentSubTool = null;
+
+    // Selection box properties
+    this.isSelecting = false;
+    this.selectionStart = null;
+    this.selectionEnd = null;
+
     this.createContextMenu();
   }
 
@@ -108,19 +115,25 @@ export class SelectTool extends Tool {
     this.transformMode = mode;
 
     // Create appropriate sub-tool
-    if (this.selectedEntity) {
+    if (this.selectedEntities.length > 0) {
       switch (mode) {
         case "move":
-          this.currentSubTool = new MoveTool(this.editor, this.selectedEntity);
+          this.currentSubTool = new MoveTool(
+            this.editor,
+            this.selectedEntities
+          );
           break;
         case "rotate":
           this.currentSubTool = new RotateTool(
             this.editor,
-            this.selectedEntity
+            this.selectedEntities
           );
           break;
         case "scale":
-          this.currentSubTool = new ScaleTool(this.editor, this.selectedEntity);
+          this.currentSubTool = new ScaleTool(
+            this.editor,
+            this.selectedEntities
+          );
           break;
       }
     }
@@ -139,14 +152,15 @@ export class SelectTool extends Tool {
 
   onMouseDown(e, worldPos) {
     // Right-click on selected entity shows context menu
-    if (
-      e.button === 2 &&
-      this.selectedEntity &&
-      this.isPointInEntity(worldPos, this.selectedEntity)
-    ) {
-      e.preventDefault();
-      this.showContextMenu(e.clientX, e.clientY);
-      return;
+    if (e.button === 2 && this.selectedEntities.length > 0) {
+      // Check if right-clicking on any selected entity
+      for (let entity of this.selectedEntities) {
+        if (this.isPointInEntity(worldPos, entity)) {
+          e.preventDefault();
+          this.showContextMenu(e.clientX, e.clientY);
+          return;
+        }
+      }
     }
 
     // Left-click
@@ -154,7 +168,7 @@ export class SelectTool extends Tool {
 
     // Check if clicking on sub-tool widget
     let clickedWidget = false;
-    if (this.currentSubTool) {
+    if (this.currentSubTool && this.selectedEntities.length > 0) {
       // Try to interact with the widget
       if (this.currentSubTool.getWidgetInteraction) {
         const interaction = this.currentSubTool.getWidgetInteraction(worldPos);
@@ -172,9 +186,9 @@ export class SelectTool extends Tool {
         }
       } else {
         // For rotate tool, check if clicking near the circle
-        const pos = this.selectedEntity.body.position;
-        const dx = worldPos.x - pos.x;
-        const dy = worldPos.y - pos.y;
+        const center = this.getMultiSelectCenter();
+        const dx = worldPos.x - center.x;
+        const dy = worldPos.y - center.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > 50 && dist < 90) {
           clickedWidget = true;
@@ -185,13 +199,17 @@ export class SelectTool extends Tool {
     }
 
     // Check for entity selection
-    const entities = [...this.editor.game.entities, this.editor.game.player];
+    const entities = [...this.editor.game.entities];
+    if (this.editor.game.player) {
+      entities.push(this.editor.game.player);
+    }
 
     let foundEntity = false;
     for (let entity of entities) {
-      if (this.isPointInEntity(worldPos, entity)) {
-        // Select entity (even if different from current)
+      if (entity && this.isPointInEntity(worldPos, entity)) {
+        // Select entity
         this.selectedEntity = entity;
+        this.selectedEntities = [entity];
         this.setTransformMode(this.transformMode);
         foundEntity = true;
 
@@ -206,102 +224,175 @@ export class SelectTool extends Tool {
       }
     }
 
-    // If no entity or widget was clicked, deselect
+    // If no entity or widget was clicked, start selection box
     if (!foundEntity && !clickedWidget) {
+      this.isSelecting = true;
+      this.selectionStart = { ...worldPos };
+      this.selectionEnd = { ...worldPos };
       this.selectedEntity = null;
+      this.selectedEntities = [];
       this.currentSubTool = null;
       this.editor.updatePropertiesPanel();
     }
   }
 
   onMouseMove(e, worldPos) {
+    // Update selection box
+    if (this.isSelecting) {
+      this.selectionEnd = { ...worldPos };
+      return;
+    }
+
     if (this.currentSubTool) {
       this.currentSubTool.onMouseMove(e, worldPos);
     }
   }
 
   onMouseUp(e, worldPos) {
+    // Finalize selection box
+    if (this.isSelecting) {
+      this.isSelecting = false;
+      this.finalizeSelection();
+      return;
+    }
+
     if (this.currentSubTool) {
       this.currentSubTool.onMouseUp(e, worldPos);
     }
   }
 
-  onKeyDown(e) {
-    if (!this.selectedEntity) return;
-
-    const { Body } = Matter;
-    const moveAmount = 5;
-    const currentPos = this.selectedEntity.body.position;
-
-    switch (e.key) {
-      case "ArrowLeft":
-        e.preventDefault();
-        Body.setPosition(this.selectedEntity.body, {
-          x: currentPos.x - moveAmount,
-          y: currentPos.y,
-        });
-        break;
-      case "ArrowRight":
-        e.preventDefault();
-        Body.setPosition(this.selectedEntity.body, {
-          x: currentPos.x + moveAmount,
-          y: currentPos.y,
-        });
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        Body.setPosition(this.selectedEntity.body, {
-          x: currentPos.x,
-          y: currentPos.y - moveAmount,
-        });
-        break;
-      case "ArrowDown":
-        e.preventDefault();
-        Body.setPosition(this.selectedEntity.body, {
-          x: currentPos.x,
-          y: currentPos.y + moveAmount,
-        });
-        break;
+  finalizeSelection() {
+    if (!this.selectionStart || !this.selectionEnd) {
+      this.isSelecting = false;
+      this.selectionStart = null;
+      this.selectionEnd = null;
+      return;
     }
+
+    const minX = Math.min(this.selectionStart.x, this.selectionEnd.x);
+    const maxX = Math.max(this.selectionStart.x, this.selectionEnd.x);
+    const minY = Math.min(this.selectionStart.y, this.selectionEnd.y);
+    const maxY = Math.max(this.selectionStart.y, this.selectionEnd.y);
+
+    // Find all entities within selection box
+    const entities = [...this.editor.game.entities];
+    if (this.editor.game.player) {
+      entities.push(this.editor.game.player);
+    }
+
+    this.selectedEntities = entities.filter((entity) => {
+      if (!entity || !entity.body) return false;
+      const pos = entity.body.position;
+      return pos.x >= minX && pos.x <= maxX && pos.y >= minY && pos.y <= maxY;
+    });
+
+    // Update selected entity for compatibility
+    this.selectedEntity =
+      this.selectedEntities.length === 1 ? this.selectedEntities[0] : null;
+
+    // Set transform mode if entities selected
+    if (this.selectedEntities.length > 0) {
+      this.setTransformMode(this.transformMode);
+    }
+
+    // Clear selection box
+    this.selectionStart = null;
+    this.selectionEnd = null;
+
+    // Update properties panel
+    this.editor.updatePropertiesPanel();
+  }
+
+  getMultiSelectCenter() {
+    if (this.selectedEntities.length === 0) return { x: 0, y: 0 };
+
+    let sumX = 0,
+      sumY = 0;
+    for (let entity of this.selectedEntities) {
+      sumX += entity.body.position.x;
+      sumY += entity.body.position.y;
+    }
+
+    return {
+      x: sumX / this.selectedEntities.length,
+      y: sumY / this.selectedEntities.length,
+    };
   }
 
   renderHighlight(ctx, camera) {
-    if (!this.selectedEntity) return;
+    // Draw selection box if selecting
+    if (this.isSelecting && this.selectionStart && this.selectionEnd) {
+      const viewWidth = camera.width / camera.zoom;
+      const scale = camera.width / viewWidth;
 
-    const pos = this.selectedEntity.body.position;
+      const startScreenX =
+        (this.selectionStart.x - camera.x) * scale + camera.width / 2;
+      const startScreenY =
+        (this.selectionStart.y - camera.y) * scale + camera.height / 2;
+      const endScreenX =
+        (this.selectionEnd.x - camera.x) * scale + camera.width / 2;
+      const endScreenY =
+        (this.selectionEnd.y - camera.y) * scale + camera.height / 2;
+
+      ctx.strokeStyle = "#00ffff";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.strokeRect(
+        startScreenX,
+        startScreenY,
+        endScreenX - startScreenX,
+        endScreenY - startScreenY
+      );
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = "rgba(0, 255, 255, 0.1)";
+      ctx.fillRect(
+        startScreenX,
+        startScreenY,
+        endScreenX - startScreenX,
+        endScreenY - startScreenY
+      );
+      return;
+    }
+
+    // Draw highlights for all selected entities
+    if (this.selectedEntities.length === 0) return;
+
     const viewWidth = camera.width / camera.zoom;
     const scale = camera.width / viewWidth;
 
-    const screenX = (pos.x - camera.x) * scale + camera.width / 2;
-    const screenY = (pos.y - camera.y) * scale + camera.height / 2;
+    for (let entity of this.selectedEntities) {
+      const pos = entity.body.position;
+      const screenX = (pos.x - camera.x) * scale + camera.width / 2;
+      const screenY = (pos.y - camera.y) * scale + camera.height / 2;
 
-    ctx.strokeStyle = this.highlightColor;
-    ctx.lineWidth = this.highlightWidth;
+      ctx.strokeStyle = this.highlightColor;
+      ctx.lineWidth = this.highlightWidth;
 
-    if (this.selectedEntity.config.shape === "circle") {
-      const radius = this.selectedEntity.config.radius * scale;
-      ctx.beginPath();
-      ctx.arc(screenX, screenY, radius + 5 * scale, 0, Math.PI * 2);
-      ctx.stroke();
-    } else {
-      // For rectangles, we need to get the actual bounds from Matter.js body
-      const width = this.selectedEntity.config.width * scale;
-      const height = this.selectedEntity.config.height * scale;
-      const offset = 5 * scale;
+      if (entity.config.shape === "circle") {
+        const radius = entity.config.radius * scale;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, radius + 5 * scale, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        const width = entity.config.width * scale;
+        const height = entity.config.height * scale;
+        const offset = 5 * scale;
 
-      ctx.save();
-      ctx.translate(screenX, screenY);
-      ctx.rotate(this.selectedEntity.body.angle);
-      ctx.strokeRect(
-        -width / 2 - offset,
-        -height / 2 - offset,
-        width + offset * 2,
-        height + offset * 2
-      );
-      ctx.restore();
+        ctx.save();
+        ctx.translate(screenX, screenY);
+        ctx.rotate(entity.body.angle);
+        ctx.strokeRect(
+          -width / 2 - offset,
+          -height / 2 - offset,
+          width + offset * 2,
+          height + offset * 2
+        );
+        ctx.restore();
+      }
     }
 
-    // Render sub-tool widget
+    // Render sub-tool widget at center of multi-selection
     if (this.currentSubTool && this.currentSubTool.renderWidget) {
       this.currentSubTool.renderWidget(ctx, camera);
     }
@@ -332,9 +423,56 @@ export class SelectTool extends Tool {
   }
 
   onKeyDown(e) {
-    // Only handle keyboard shortcuts when an entity is selected
-    if (!this.selectedEntity) {
+    // Only handle keyboard shortcuts when entities are selected
+    if (this.selectedEntities.length === 0) {
       return;
+    }
+
+    const { Body } = Matter;
+    const moveAmount = 5;
+
+    // Handle arrow key nudging for all selected entities
+    switch (e.key) {
+      case "ArrowLeft":
+        e.preventDefault();
+        for (let entity of this.selectedEntities) {
+          const currentPos = entity.body.position;
+          Body.setPosition(entity.body, {
+            x: currentPos.x - moveAmount,
+            y: currentPos.y,
+          });
+        }
+        return;
+      case "ArrowRight":
+        e.preventDefault();
+        for (let entity of this.selectedEntities) {
+          const currentPos = entity.body.position;
+          Body.setPosition(entity.body, {
+            x: currentPos.x + moveAmount,
+            y: currentPos.y,
+          });
+        }
+        return;
+      case "ArrowUp":
+        e.preventDefault();
+        for (let entity of this.selectedEntities) {
+          const currentPos = entity.body.position;
+          Body.setPosition(entity.body, {
+            x: currentPos.x,
+            y: currentPos.y - moveAmount,
+          });
+        }
+        return;
+      case "ArrowDown":
+        e.preventDefault();
+        for (let entity of this.selectedEntities) {
+          const currentPos = entity.body.position;
+          Body.setPosition(entity.body, {
+            x: currentPos.x,
+            y: currentPos.y + moveAmount,
+          });
+        }
+        return;
     }
 
     // Handle transform mode shortcuts

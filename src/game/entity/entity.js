@@ -4,6 +4,8 @@ import Matter from "matter-js";
 
 export class Entity {
   constructor(config, world) {
+    const { Bodies, World } = Matter;
+
     // Store reference to world for cleanup
     this.world = world;
 

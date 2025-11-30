@@ -432,10 +432,11 @@ export class EntityTool extends Tool {
     // Switch to select tool and select the newly created entity
     this.editor.selectTool("select");
     this.editor.tools.select.selectedEntity = newEntity;
+    this.editor.tools.select.selectedEntities = [newEntity];
     this.editor.tools.select.setTransformMode(
       this.editor.tools.select.transformMode
     );
-    this.editor.updatePropertiesPanel(newEntity);
+    this.editor.updatePropertiesPanel();
   }
 
   onActivate() {

@@ -1,4 +1,4 @@
-import { Styles } from "../../styles/styles.js";
+import { Styles } from "../styles/styles.js";
 
 export class Debug {
   constructor() {
@@ -27,6 +27,7 @@ export class Debug {
     // Create content section
     const content = document.createElement("div");
     content.id = "info-content";
+    content.style.cssText = "user-select: none; pointer-events: none;";
     content.innerHTML = `
                     <div><strong>Controls:</strong></div>
                     <div>Arrow Keys or WASD - Move Player</div>
@@ -72,6 +73,51 @@ export class Debug {
 
     // Add to body
     document.body.appendChild(this.panel);
+
+    // Make panel draggable
+    this.setupDragging();
+  }
+
+  setupDragging() {
+    let isDragging = false;
+    let currentX;
+    let currentY;
+    let initialX;
+    let initialY;
+    let xOffset = 0;
+    let yOffset = 0;
+
+    // Make header the drag handle
+    this.header.style.cursor = "move";
+
+    this.header.addEventListener("mousedown", (e) => {
+      // Only start dragging if clicking directly on header (not on collapsible arrow area)
+      initialX = e.clientX - xOffset;
+      initialY = e.clientY - yOffset;
+
+      if (e.target === this.header || e.target.parentNode === this.header) {
+        isDragging = true;
+      }
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (isDragging) {
+        e.preventDefault();
+
+        currentX = e.clientX - initialX;
+        currentY = e.clientY - initialY;
+
+        xOffset = currentX;
+        yOffset = currentY;
+
+        this.panel.style.left = `${currentX + 10}px`;
+        this.panel.style.top = `${currentY + 10}px`;
+      }
+    });
+
+    document.addEventListener("mouseup", () => {
+      isDragging = false;
+    });
   }
 
   toggle() {

@@ -35,6 +35,8 @@ export class Liquid extends Entity {
       super.update();
     }
 
+    const { Body } = Matter;
+
     // If collisions are disabled, don't apply liquid effects
     if (this.config.collisionsEnabled === false) {
       // Restore any entities still affected

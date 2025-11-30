@@ -11,41 +11,68 @@ export class MoveTool extends TransformTool {
   }
 
   onMouseDown(e, worldPos) {
-    if (!this.entity) return;
+    if (this.entities.length === 0) return;
 
     const widgetInteraction = this.getWidgetInteraction(worldPos);
 
     if (widgetInteraction) {
       this.dragMode = widgetInteraction;
       this.isDragging = true;
-      this.dragOffset.x = this.entity.body.position.x - worldPos.x;
-      this.dragOffset.y = this.entity.body.position.y - worldPos.y;
+      const center = this.getCenter();
+      this.dragOffset.x = center.x - worldPos.x;
+      this.dragOffset.y = center.y - worldPos.y;
+
+      // Store initial positions for all entities
+      this.initialPositions = this.entities.map((entity) => ({
+        entity: entity,
+        x: entity.body.position.x,
+        y: entity.body.position.y,
+      }));
     }
   }
 
   onMouseMove(e, worldPos) {
-    if (!this.isDragging || !this.entity) return;
+    if (
+      !this.isDragging ||
+      this.entities.length === 0 ||
+      !this.initialPositions
+    )
+      return;
 
     const { Body } = Matter;
+    const center = this.getCenter();
     const targetX = worldPos.x + this.dragOffset.x;
     const targetY = worldPos.y + this.dragOffset.y;
 
-    switch (this.dragMode) {
-      case "free":
-        Body.setPosition(this.entity.body, { x: targetX, y: targetY });
-        break;
-      case "x":
-        Body.setPosition(this.entity.body, {
-          x: targetX,
-          y: this.entity.body.position.y,
-        });
-        break;
-      case "y":
-        Body.setPosition(this.entity.body, {
-          x: this.entity.body.position.x,
-          y: targetY,
-        });
-        break;
+    // Calculate delta from initial center
+    const deltaX = targetX - center.x;
+    const deltaY = targetY - center.y;
+
+    // Apply delta to all entities
+    for (let i = 0; i < this.entities.length; i++) {
+      const entity = this.entities[i];
+      const initial = this.initialPositions[i];
+
+      switch (this.dragMode) {
+        case "free":
+          Body.setPosition(entity.body, {
+            x: initial.x + deltaX,
+            y: initial.y + deltaY,
+          });
+          break;
+        case "x":
+          Body.setPosition(entity.body, {
+            x: initial.x + deltaX,
+            y: entity.body.position.y,
+          });
+          break;
+        case "y":
+          Body.setPosition(entity.body, {
+            x: entity.body.position.x,
+            y: initial.y + deltaY,
+          });
+          break;
+      }
     }
   }
 
@@ -55,6 +82,7 @@ export class MoveTool extends TransformTool {
       if (this.editor && this.editor.updateWorkingState) {
         this.editor.updateWorkingState();
       }
+      this.initialPositions = null;
     }
     this.isDragging = false;
     // Update properties panel after move
@@ -64,9 +92,9 @@ export class MoveTool extends TransformTool {
   }
 
   getWidgetInteraction(worldPos) {
-    if (!this.entity) return null;
+    if (this.entities.length === 0) return null;
 
-    const pos = this.entity.body.position;
+    const pos = this.getCenter();
     const dx = worldPos.x - pos.x;
     const dy = worldPos.y - pos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);

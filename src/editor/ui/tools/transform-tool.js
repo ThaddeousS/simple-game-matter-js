@@ -1,10 +1,29 @@
 import { Tool } from "./tool.js";
 
 export class TransformTool extends Tool {
-  constructor(editor, entity, label) {
+  constructor(editor, entities, label) {
     super(editor, label);
-    this.entity = entity;
+    // Support both single entity and array of entities
+    this.entities = Array.isArray(entities) ? entities : [entities];
+    this.entity = this.entities[0]; // Keep for backward compatibility
     this.isDragging = false;
+  }
+
+  // Helper to get center position of all entities
+  getCenter() {
+    if (this.entities.length === 0) return { x: 0, y: 0 };
+
+    let sumX = 0,
+      sumY = 0;
+    for (let entity of this.entities) {
+      sumX += entity.body.position.x;
+      sumY += entity.body.position.y;
+    }
+
+    return {
+      x: sumX / this.entities.length,
+      y: sumY / this.entities.length,
+    };
   }
 
   // Helper to render handles with common styling
@@ -51,9 +70,9 @@ export class TransformTool extends Tool {
 
   // Helper to convert entity position to screen position
   getScreenPosition(camera) {
-    if (!this.entity) return { x: 0, y: 0, scale: 1 };
+    if (this.entities.length === 0) return { x: 0, y: 0, scale: 1 };
 
-    const pos = this.entity.body.position;
+    const pos = this.getCenter();
     const viewWidth = camera.width / camera.zoom;
     const scale = camera.width / viewWidth;
 

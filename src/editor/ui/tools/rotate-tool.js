@@ -9,29 +9,52 @@ export class RotateTool extends TransformTool {
   }
 
   onMouseDown(e, worldPos) {
-    if (!this.entity) return;
+    if (this.entities.length === 0) return;
 
-    const pos = this.entity.body.position;
-    const dx = worldPos.x - pos.x;
-    const dy = worldPos.y - pos.y;
+    const center = this.getCenter();
+    const dx = worldPos.x - center.x;
+    const dy = worldPos.y - center.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist > 50 && dist < 90) {
       this.isDragging = true;
-      const angle = Math.atan2(dy, dx);
-      this.rotationStart = angle - this.entity.body.angle;
+      this.rotationStart = Math.atan2(dy, dx);
+
+      // Store initial positions and angles for all entities
+      this.initialStates = this.entities.map((entity) => ({
+        entity: entity,
+        x: entity.body.position.x,
+        y: entity.body.position.y,
+        angle: entity.body.angle,
+        offsetX: entity.body.position.x - center.x,
+        offsetY: entity.body.position.y - center.y,
+      }));
     }
   }
 
   onMouseMove(e, worldPos) {
-    if (!this.isDragging || !this.entity) return;
+    if (!this.isDragging || this.entities.length === 0 || !this.initialStates)
+      return;
 
     const { Body } = Matter;
-    const angle = Math.atan2(
-      worldPos.y - this.entity.body.position.y,
-      worldPos.x - this.entity.body.position.x
+    const center = this.getCenter();
+    const currentAngle = Math.atan2(
+      worldPos.y - center.y,
+      worldPos.x - center.x
     );
-    Body.setAngle(this.entity.body, angle - this.rotationStart);
+    const deltaAngle = currentAngle - this.rotationStart;
+
+    // Rotate each entity around the center
+    for (let state of this.initialStates) {
+      // Rotate position around center
+      const cos = Math.cos(deltaAngle);
+      const sin = Math.sin(deltaAngle);
+      const newX = center.x + (state.offsetX * cos - state.offsetY * sin);
+      const newY = center.y + (state.offsetX * sin + state.offsetY * cos);
+
+      Body.setPosition(state.entity.body, { x: newX, y: newY });
+      Body.setAngle(state.entity.body, state.angle + deltaAngle);
+    }
   }
 
   onMouseUp(e, worldPos) {
@@ -40,6 +63,7 @@ export class RotateTool extends TransformTool {
       if (this.editor && this.editor.updateWorkingState) {
         this.editor.updateWorkingState();
       }
+      this.initialStates = null;
     }
     this.isDragging = false;
     // Update properties panel after rotation

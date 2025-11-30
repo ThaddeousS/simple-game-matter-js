@@ -69,8 +69,15 @@ export class Editor {
 
     // Listen for render events to draw selection highlight
     window.addEventListener(GameEvents.BEFORE_RENDER, (e) => {
-      if (this.isActive && this.currentTool === this.tools.select) {
-        this.tools.select.renderHighlight(e.detail.context, e.detail.camera);
+      if (this.isActive) {
+        if (this.currentTool === this.tools.select) {
+          this.tools.select.renderHighlight(e.detail.context, e.detail.camera);
+        } else if (
+          this.currentTool === this.tools.delete &&
+          this.tools.delete.renderHighlight
+        ) {
+          this.tools.delete.renderHighlight(e.detail.context, e.detail.camera);
+        }
       }
     });
   }
@@ -210,19 +217,82 @@ export class Editor {
     const propertiesDiv = document.getElementById("editor-properties");
     if (!propertiesDiv) return;
 
-    // Get selected entity from select tool
-    const selectedEntity =
+    // Get selected entities from select tool
+    const selectedEntities =
       this.currentTool === this.tools.select
-        ? this.tools.select.selectedEntity
-        : null;
+        ? this.tools.select.selectedEntities
+        : [];
 
-    if (!selectedEntity) {
+    if (selectedEntities.length === 0) {
       propertiesDiv.innerHTML =
         '<p style="color: #aaa; font-size: 13px;">Select an object to edit properties</p>';
       return;
     }
 
-    const entity = selectedEntity;
+    // If multiple entities selected, create tabs
+    if (selectedEntities.length > 1) {
+      let html =
+        '<div style="display: flex; flex-direction: column; gap: 8px;">';
+      html +=
+        '<div style="color: #3498db; font-weight: bold; margin-bottom: 8px;">Multiple Objects Selected (' +
+        selectedEntities.length +
+        ")</div>";
+      html +=
+        '<div style="display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid #555; padding-bottom: 8px;">';
+
+      // Create tabs for each entity
+      for (let i = 0; i < selectedEntities.length; i++) {
+        const entity = selectedEntities[i];
+        const isActive = i === 0;
+        html += `<button class="entity-tab" data-entity-index="${i}" style="
+                            padding: 6px 12px;
+                            background: ${isActive ? "#3498db" : "#2c3e50"};
+                            color: white;
+                            border: none;
+                            border-radius: 3px;
+                            cursor: pointer;
+                            font-size: 11px;
+                        ">${entity.config.label || "Entity " + (i + 1)}</button>`;
+      }
+
+      html += "</div>";
+      html += '<div id="multi-entity-properties"></div>';
+      html += "</div>";
+
+      propertiesDiv.innerHTML = html;
+
+      // Add click handlers to tabs
+      const tabs = propertiesDiv.querySelectorAll(".entity-tab");
+      tabs.forEach((tab, index) => {
+        tab.addEventListener("click", () => {
+          // Update active tab styling
+          tabs.forEach((t) => (t.style.background = "#2c3e50"));
+          tab.style.background = "#3498db";
+
+          // Show properties for selected entity
+          this.showEntityProperties(
+            selectedEntities[index],
+            document.getElementById("multi-entity-properties")
+          );
+        });
+      });
+
+      // Show first entity's properties by default
+      this.showEntityProperties(
+        selectedEntities[0],
+        document.getElementById("multi-entity-properties")
+      );
+      return;
+    }
+
+    // Single entity selected - show properties directly
+    const entity = selectedEntities[0];
+    this.showEntityProperties(entity, propertiesDiv);
+  }
+
+  showEntityProperties(entity, container) {
+    if (!container) return;
+
     const config = entity.config;
 
     // Build properties form
@@ -406,7 +476,7 @@ export class Editor {
     html += "</div>";
 
     // Entity Type section - only show for non-player entities
-    const isPlayer = selectedEntity.config.label === "player";
+    const isPlayer = entity.config.label === "player";
     if (!isPlayer) {
       html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
       html +=
@@ -513,10 +583,10 @@ export class Editor {
 
     html += "</div>";
 
-    propertiesDiv.innerHTML = html;
+    container.innerHTML = html;
 
     // Add event listeners to all inputs
-    this.attachPropertyListeners(selectedEntity);
+    this.attachPropertyListeners(entity);
 
     // Add collapse/expand listeners for all sections
     this.attachSectionCollapseListeners();
@@ -733,7 +803,8 @@ export class Editor {
 
           // Update selection and refresh properties panel
           editor.tools.select.selectedEntity = newPlayer;
-          editor.updatePropertiesPanel(newPlayer);
+          editor.tools.select.selectedEntities = [newPlayer];
+          editor.updatePropertiesPanel();
         } else {
           // Handle regular entity shape change
           const entityIndex = editor.game.entities.indexOf(entity);
@@ -757,7 +828,8 @@ export class Editor {
 
           // Update selection and refresh properties panel
           editor.tools.select.selectedEntity = newEntity;
-          editor.updatePropertiesPanel(newEntity);
+          editor.tools.select.selectedEntities = [newEntity];
+          editor.updatePropertiesPanel();
         }
       });
     }

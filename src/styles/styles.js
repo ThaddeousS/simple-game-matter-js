@@ -47,12 +47,15 @@ export class Styles {
                 padding: 15px;
                 border-radius: 5px;
                 font-size: 14px;
-                z-index: 10;
+                z-index: 1000;
+                user-select: none;
+                pointer-events: auto;
             `;
 
   static debugHeader = `
-                cursor: pointer;
+                cursor: move;
                 user-select: none;
+                pointer-events: auto;
                 border-bottom: 1px solid rgba(255,255,255,0.3);
                 padding-bottom: 5px;
                 margin-bottom: 5px;
@@ -62,6 +65,8 @@ export class Styles {
                 border-top: 1px solid rgba(255,255,255,0.3);
                 padding-top: 5px;
                 margin-top: 5px;
+                user-select: none;
+                pointer-events: none;
             `;
 
   // Editor styles
