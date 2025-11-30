@@ -1,12 +1,15 @@
 import { EntityConfig } from "../../config/entity-config.js";
+import { TextureLoader } from "../texture/texture-loader.js";
 import Matter from "matter-js";
 
 export class Entity {
   constructor(config, world) {
-    const { Bodies, World } = Matter;
-
     // Store reference to world for cleanup
     this.world = world;
+
+    // Create texture loader for this entity
+    this.textureLoader = new TextureLoader();
+    this.textureLoaded = false; // Track if texture has been loaded
 
     // Create EntityConfig instance with provided config
     this.entityConfig = new EntityConfig(config);
@@ -20,11 +23,27 @@ export class Entity {
     this.healthDisplay = this.config.healthDisplay;
     this.isDestroyed = false;
 
+    // Create body immediately
+    this.createBody(world);
+  }
+
+  createBody(world) {
+    const { Bodies, World } = Matter;
+
     // Determine if this is a sensor based on entityType
     // Triggers and liquids are always sensors (no physical collision)
     const isSensor =
       this.config.entityType === "trigger" ||
       this.config.entityType === "liquid";
+
+    // Build render options
+    const buildRenderOptions = () => {
+      return {
+        fillStyle: this.config.color,
+        strokeStyle: this.config.strokeColor,
+        lineWidth: this.config.strokeWidth,
+      };
+    };
 
     // Create the physical body based on shape
     if (this.config.shape === "circle") {
@@ -33,11 +52,7 @@ export class Entity {
         this.config.y,
         this.config.radius,
         {
-          render: {
-            fillStyle: this.config.color,
-            strokeStyle: this.config.strokeColor,
-            lineWidth: this.config.strokeWidth,
-          },
+          render: buildRenderOptions(),
           friction: this.config.friction,
           frictionAir: this.config.frictionAir,
           restitution: this.config.restitution,
@@ -62,11 +77,7 @@ export class Entity {
         this.config.y,
         vertices,
         {
-          render: {
-            fillStyle: this.config.color,
-            strokeStyle: this.config.strokeColor,
-            lineWidth: this.config.strokeWidth,
-          },
+          render: buildRenderOptions(),
           friction: this.config.friction,
           frictionAir: this.config.frictionAir,
           restitution: this.config.restitution,
@@ -85,11 +96,7 @@ export class Entity {
         this.config.width,
         this.config.height,
         {
-          render: {
-            fillStyle: this.config.color,
-            strokeStyle: this.config.strokeColor,
-            lineWidth: this.config.strokeWidth,
-          },
+          render: buildRenderOptions(),
           friction: this.config.friction,
           frictionAir: this.config.frictionAir,
           restitution: this.config.restitution,
@@ -128,6 +135,19 @@ export class Entity {
 
     // Add to world
     World.add(world, this.body);
+  }
+
+  loadTexture(dataUrl, xScale = 1, yScale = 1, onSuccess, onError) {
+    if (!this.textureLoader) return;
+
+    this.textureLoader.applyTextureToBody(
+      this.body,
+      dataUrl,
+      xScale,
+      yScale,
+      onSuccess,
+      onError
+    );
   }
 
   applyCollisionGroups() {
@@ -170,6 +190,22 @@ export class Entity {
 
   getPosition() {
     return this.body.position;
+  }
+
+  update() {
+    // Load texture if specified in config and not already loaded
+    if (
+      !this.textureLoaded &&
+      this.config.textureUrl &&
+      this.config.textureUrl.trim() !== ""
+    ) {
+      this.loadTexture(
+        this.config.textureUrl,
+        this.config.textureScaleX || 1,
+        this.config.textureScaleY || 1
+      );
+      this.textureLoaded = true;
+    }
   }
 
   takeDamage(amount) {
@@ -303,11 +339,5 @@ export class Entity {
 
   getEntityConfig() {
     return this.entityConfig;
-  }
-
-  // Update method - can be overridden by subclasses
-  update(input) {
-    // Base entities don't have update logic
-    // This will be overridden by Player class
   }
 }

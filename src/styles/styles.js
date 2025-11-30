@@ -79,8 +79,8 @@ export class Styles {
   static editorTopToolbar = `
                 position: absolute;
                 top: 0;
-                left: 0;
-                width: 100%;
+                left: 180px;
+                right: 220px;
                 height: 60px;
                 background: rgba(30, 30, 30, 0.95);
                 border-bottom: 2px solid #3498db;
@@ -94,12 +94,14 @@ export class Styles {
 
   static editorLeftToolbar = `
                 position: absolute;
-                top: 0;
+                top: 60px;
                 left: 0;
                 bottom: 20px;
                 background: rgba(30, 30, 30, 0.95);
                 border-right: 2px solid #3498db;
+                border-top: 2px solid #3498db;
                 border-bottom: 2px solid #3498db;
+                border-top-right-radius: 8px;
                 border-bottom-right-radius: 8px;
                 pointer-events: all;
                 overflow-y: auto;
@@ -109,12 +111,14 @@ export class Styles {
 
   static editorRightToolbar = `
                 position: absolute;
-                top: 0;
+                top: 60px;
                 right: 0;
                 bottom: 20px;
                 background: rgba(30, 30, 30, 0.95);
                 border-left: 2px solid #3498db;
+                border-top: 2px solid #3498db;
                 border-bottom: 2px solid #3498db;
+                border-top-left-radius: 8px;
                 border-bottom-left-radius: 8px;
                 pointer-events: all;
                 overflow-y: auto;

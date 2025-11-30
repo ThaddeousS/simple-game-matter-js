@@ -30,6 +30,11 @@ export class Liquid extends Entity {
   }
 
   update(entities, player) {
+    // Call parent update for texture loading
+    if (super.update) {
+      super.update();
+    }
+
     // If collisions are disabled, don't apply liquid effects
     if (this.config.collisionsEnabled === false) {
       // Restore any entities still affected

@@ -40,6 +40,11 @@ export class Cloud extends Entity {
   }
 
   update(entities, player) {
+    // Call parent update for texture loading
+    if (super.update) {
+      super.update();
+    }
+
     // This method will be called by the game engine to update collision state
 
     // If collisions are disabled, don't update sensor state

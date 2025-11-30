@@ -21,12 +21,26 @@ export class Player extends Entity {
     this.maxSpeed = playerConfig.maxSpeed;
   }
 
-  update(input) {
+  update() {
+    // Call parent update for texture loading
+    if (super.update) {
+      super.update();
+    }
+
     // Check if player is destroyed or has no health
     if (this.isDestroyed) return;
 
     if (this.health <= 0) {
       this.destroy();
+      return;
+    }
+  }
+
+  updateInput(input) {
+    // Check if player is destroyed or has no health
+    if (this.isDestroyed) return;
+
+    if (this.health <= 0) {
       return;
     }
 

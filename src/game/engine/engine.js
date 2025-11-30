@@ -165,27 +165,45 @@ export class Engine {
   }
 
   update() {
-    // Update player with input (only if input is enabled)
-    if (this.player && this.input && this.inputEnabled) {
-      this.player.update(this.input);
-    }
-
-    // Update triggers
-    this.triggers.forEach((trigger) => {
-      trigger.update(this.entities, this.player);
+    // Update all entities for texture loading
+    this.entities.forEach((entity) => {
+      if (entity.update) {
+        entity.update();
+      }
     });
 
-    // Update clouds (one-way platforms need to check entity positions)
+    // Update triggers (they have their own update logic too)
+    this.triggers.forEach((trigger) => {
+      if (trigger.update) {
+        trigger.update();
+      }
+    });
+
+    // Update player (for texture loading, health checks, etc.)
+    if (this.player) {
+      this.player.update();
+    }
+
+    // Update player input (only if input is enabled)
+    if (this.player && this.input && this.inputEnabled) {
+      this.player.updateInput(this.input);
+    }
+
+    // Update clouds (one-way platforms need entity position checks)
     if (this.clouds) {
       this.clouds.forEach((cloud) => {
-        cloud.update(this.entities, this.player);
+        if (cloud.update) {
+          cloud.update(this.entities, this.player);
+        }
       });
     }
 
-    // Update liquids (apply viscosity effects to entities inside)
+    // Update liquids (apply viscosity effects)
     if (this.liquids) {
       this.liquids.forEach((liquid) => {
-        liquid.update(this.entities, this.player);
+        if (liquid.update) {
+          liquid.update(this.entities, this.player);
+        }
       });
     }
   }

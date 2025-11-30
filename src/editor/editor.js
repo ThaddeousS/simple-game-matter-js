@@ -235,7 +235,13 @@ export class Editor {
     // Position
     html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
     html +=
-      '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Position</div>';
+      '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto; cursor: pointer;" class="section-header" data-section="position">';
+    html +=
+      '<span class="collapse-icon" style="font-size: 10px; color: #3498db;">▶</span>';
+    html +=
+      '<div style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">Position</div>';
+    html += "</div>";
+    html += '<div id="position-properties-container" style="display: none;">';
     html += this.createPropertyInput(
       "X",
       "x",
@@ -249,11 +255,18 @@ export class Editor {
       "number"
     );
     html += "</div>";
+    html += "</div>";
 
     // Size/Dimensions
     html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
     html +=
-      '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Size</div>';
+      '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto; cursor: pointer;" class="section-header" data-section="size">';
+    html +=
+      '<span class="collapse-icon" style="font-size: 10px; color: #3498db;">▶</span>';
+    html +=
+      '<div style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">Size</div>';
+    html += "</div>";
+    html += '<div id="size-properties-container" style="display: none;">';
     if (config.shape === "circle") {
       html += this.createPropertyInput(
         "Radius",
@@ -276,19 +289,33 @@ export class Editor {
       );
     }
     html += "</div>";
+    html += "</div>";
 
     // Rotation
     html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
     html +=
-      '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Rotation</div>';
+      '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto; cursor: pointer;" class="section-header" data-section="rotation">';
+    html +=
+      '<span class="collapse-icon" style="font-size: 10px; color: #3498db;">▶</span>';
+    html +=
+      '<div style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">Rotation</div>';
+    html += "</div>";
+    html += '<div id="rotation-properties-container" style="display: none;">';
     const degrees = Math.round(((entity.body.angle * 180) / Math.PI) % 360);
     html += this.createPropertyInput("Angle (°)", "angle", degrees, "number");
+    html += "</div>";
     html += "</div>";
 
     // Visual
     html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
     html +=
-      '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Visual</div>';
+      '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto; cursor: pointer;" class="section-header" data-section="visual">';
+    html +=
+      '<span class="collapse-icon" style="font-size: 10px; color: #3498db;">▶</span>';
+    html +=
+      '<div style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">Visual</div>';
+    html += "</div>";
+    html += '<div id="visual-properties-container" style="display: none;">';
     html += this.createPropertyInput("Color", "color", config.color, "color");
     html += this.createPropertyInput(
       "Shape",
@@ -301,15 +328,53 @@ export class Editor {
       ["rectangle", "circle", "triangle"]
     );
     html += "</div>";
+    html += "</div>";
 
-    // Physics
+    // Texture - moved right after Visual
+    const textureEnabled = config.textureUrl && config.textureUrl.trim() !== "";
     html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
     html +=
       '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto;">';
-    html += `<input type="checkbox" id="physics-static-checkbox" style="width: 16px; height: 16px; cursor: pointer;" ${!entity.body.isStatic ? "checked" : ""}>`;
-    html += `<div id="physics-label" style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">${!entity.body.isStatic ? "Physics (enabled)" : "Physics (disabled)"}</div>`;
+    html += `<span class="collapse-icon" style="font-size: 10px; color: #3498db; cursor: pointer; user-select: none;" data-section="texture">${textureEnabled ? "▼" : "▶"}</span>`;
+    html += `<input type="checkbox" id="texture-enabled-checkbox" style="width: 16px; height: 16px; cursor: pointer;" ${textureEnabled ? "checked" : ""}>`;
+    html += `<div id="texture-label" style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">${textureEnabled ? "Texture (enabled)" : "Texture (disabled)"}</div>`;
     html += "</div>";
-    html += `<div id="physics-properties-container" style="display: ${!entity.body.isStatic ? "block" : "none"};">`;
+    html += `<div id="texture-properties-container" style="display: ${textureEnabled ? "block" : "none"};">`;
+    html += this.createPropertyInput(
+      "Texture URL",
+      "textureUrl",
+      config.textureUrl || "",
+      "text"
+    );
+    html += this.createPropertyInput(
+      "Scale X",
+      "textureScaleX",
+      config.textureScaleX !== undefined ? config.textureScaleX : 1,
+      "number",
+      0.1,
+      0.1
+    );
+    html += this.createPropertyInput(
+      "Scale Y",
+      "textureScaleY",
+      config.textureScaleY !== undefined ? config.textureScaleY : 1,
+      "number",
+      0.1,
+      0.1
+    );
+    html += "</div>";
+    html += "</div>";
+
+    // Physics
+    const physicsEnabled = !entity.body.isStatic;
+    html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
+    html +=
+      '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto;">';
+    html += `<span class="collapse-icon" style="font-size: 10px; color: #3498db; cursor: pointer; user-select: none;" data-section="physics">${physicsEnabled ? "▼" : "▶"}</span>`;
+    html += `<input type="checkbox" id="physics-static-checkbox" style="width: 16px; height: 16px; cursor: pointer;" ${physicsEnabled ? "checked" : ""}>`;
+    html += `<div id="physics-label" style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">${physicsEnabled ? "Physics (enabled)" : "Physics (disabled)"}</div>`;
+    html += "</div>";
+    html += `<div id="physics-properties-container" style="display: ${physicsEnabled ? "block" : "none"};">`;
     html += this.createPropertyInput(
       "Friction",
       "friction",
@@ -345,7 +410,14 @@ export class Editor {
     if (!isPlayer) {
       html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
       html +=
-        '<div style="color: #3498db; font-weight: bold; font-size: 12px; margin-bottom: 6px;">Entity Type</div>';
+        '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto; cursor: pointer;" class="section-header" data-section="entitytype">';
+      html +=
+        '<span class="collapse-icon" style="font-size: 10px; color: #3498db;">▶</span>';
+      html +=
+        '<div style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">Entity Type</div>';
+      html += "</div>";
+      html +=
+        '<div id="entitytype-properties-container" style="display: none;">';
       const entityTypeOptions = ["entity", "cloud", "liquid", "trigger"];
       const currentEntityType = config.entityType || "entity";
       html += this.createPropertyInput(
@@ -375,12 +447,15 @@ export class Editor {
       }
 
       html += "</div>";
+      html += "</div>";
     }
 
     // Collision
+    const collisionEnabled = config.collisionsEnabled !== false;
     html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
     html +=
       '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto;">';
+    html += `<span class="collapse-icon" style="font-size: 10px; color: #3498db; cursor: pointer; user-select: none;" data-section="collision">${collisionEnabled ? "▼" : "▶"}</span>`;
     html += `<input type="checkbox" id="collision-enabled-checkbox" style="width: 16px; height: 16px; cursor: pointer;" ${config.collisionsEnabled !== false ? "checked" : ""}>`;
     html += `<div id="collision-label" style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">${config.collisionsEnabled !== false ? "Collision (enabled)" : "Collision (disabled)"}</div>`;
     html += "</div>";
@@ -402,12 +477,13 @@ export class Editor {
     html += "</div>";
 
     // Health
+    const healthEnabled = config.healthEnabled;
     html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
     html +=
       '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto;">';
-    html += `<input type="checkbox" id="health-enabled-checkbox" style="width: 16px; height: 16px; cursor: pointer;" ${config.healthEnabled ? "checked" : ""}>`;
-    html +=
-      '<div style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">Health</div>';
+    html += `<span class="collapse-icon" style="font-size: 10px; color: #3498db; cursor: pointer; user-select: none;" data-section="health">${healthEnabled ? "▼" : "▶"}</span>`;
+    html += `<input type="checkbox" id="health-enabled-checkbox" style="width: 16px; height: 16px; cursor: pointer;" ${healthEnabled ? "checked" : ""}>`;
+    html += `<div id="health-label" style="color: #3498db; font-weight: bold; font-size: 12px; pointer-events: none; user-select: none;">${healthEnabled ? "Health (enabled)" : "Health (disabled)"}</div>`;
     html += "</div>";
     html += `<div id="health-properties-container" style="display: ${config.healthEnabled ? "block" : "none"};">`;
     html += this.createPropertyInput(
@@ -441,6 +517,9 @@ export class Editor {
 
     // Add event listeners to all inputs
     this.attachPropertyListeners(selectedEntity);
+
+    // Add collapse/expand listeners for all sections
+    this.attachSectionCollapseListeners();
   }
 
   createPropertyInput(
@@ -705,11 +784,18 @@ export class Editor {
             : "Physics (disabled)";
         }
 
+        // Update collapse icon
+        const collapseIcon = document.querySelector(
+          '.collapse-icon[data-section="physics"]'
+        );
+
         // Show physics properties when checked (physics enabled), hide when unchecked
         if (physicsEnabled) {
           physicsPropertiesContainer.style.display = "block";
+          if (collapseIcon) collapseIcon.textContent = "▼";
         } else {
           physicsPropertiesContainer.style.display = "none";
+          if (collapseIcon) collapseIcon.textContent = "▶";
         }
       });
     }
@@ -761,8 +847,14 @@ export class Editor {
             : "Collision (disabled)";
         }
 
+        // Update collapse icon
+        const collapseIcon = document.querySelector(
+          '.collapse-icon[data-section="collision"]'
+        );
+
         if (enabled) {
           collisionPropertiesContainer.style.display = "block";
+          if (collapseIcon) collapseIcon.textContent = "▼";
           // Reset collision group and filters to default
           entity.body.collisionFilter.group = 0;
           entity.body.collisionFilter.category = 0x0001; // Default category
@@ -774,6 +866,7 @@ export class Editor {
           }
         } else {
           collisionPropertiesContainer.style.display = "none";
+          if (collapseIcon) collapseIcon.textContent = "▶";
           // Set mask to 0 to prevent collision with everything
           entity.body.collisionFilter.mask = 0;
         }
@@ -825,6 +918,13 @@ export class Editor {
           }
         }
 
+        if (editor.game.gameEngine && editor.game.gameEngine.cloths) {
+          const clothIndex = editor.game.gameEngine.cloths.indexOf(entity);
+          if (clothIndex > -1) {
+            editor.game.gameEngine.cloths.splice(clothIndex, 1);
+          }
+        }
+
         // Create new entity of the appropriate type
         let newEntity;
         if (newType === "cloud") {
@@ -837,6 +937,11 @@ export class Editor {
           if (editor.game.gameEngine && editor.game.gameEngine.liquids) {
             editor.game.gameEngine.liquids.push(newEntity);
           }
+        } else if (newType === "cloth") {
+          newEntity = new Cloth(oldConfig, editor.game.world);
+          if (editor.game.gameEngine && editor.game.gameEngine.cloths) {
+            editor.game.gameEngine.cloths.push(newEntity);
+          }
         } else if (newType === "trigger") {
           newEntity = new Trigger(oldConfig, editor.game.world);
           if (editor.game.gameEngine && editor.game.gameEngine.triggers) {
@@ -846,12 +951,14 @@ export class Editor {
           newEntity = new Entity(oldConfig, editor.game.world);
         }
 
-        // Restore physics state
+        // Restore physics state (skip for cloth composites)
         const { Body } = Matter;
-        Body.setPosition(newEntity.body, oldPosition);
-        Body.setVelocity(newEntity.body, oldVelocity);
-        Body.setAngle(newEntity.body, oldAngle);
-        Body.setAngularVelocity(newEntity.body, oldAngularVelocity);
+        if (newType !== "cloth") {
+          Body.setPosition(newEntity.body, oldPosition);
+          Body.setVelocity(newEntity.body, oldVelocity);
+          Body.setAngle(newEntity.body, oldAngle);
+          Body.setAngularVelocity(newEntity.body, oldAngularVelocity);
+        }
 
         // Add to entities array
         editor.game.entities.push(newEntity);
@@ -913,15 +1020,30 @@ export class Editor {
     const healthPropertiesContainer = document.getElementById(
       "health-properties-container"
     );
+    const healthLabel = document.getElementById("health-label");
     if (healthEnabledCheckbox && healthPropertiesContainer) {
       healthEnabledCheckbox.addEventListener("change", (e) => {
         const enabled = e.target.checked;
         entity.updateConfigProperty("healthEnabled", enabled);
 
+        // Update label text based on state
+        if (healthLabel) {
+          healthLabel.textContent = enabled
+            ? "Health (enabled)"
+            : "Health (disabled)";
+        }
+
+        // Update collapse icon
+        const collapseIcon = document.querySelector(
+          '.collapse-icon[data-section="health"]'
+        );
+
         if (enabled) {
           healthPropertiesContainer.style.display = "block";
+          if (collapseIcon) collapseIcon.textContent = "▼";
         } else {
           healthPropertiesContainer.style.display = "none";
+          if (collapseIcon) collapseIcon.textContent = "▶";
           // Disable health display rendering when health is disabled
           entity.updateConfigProperty("healthDisplay", "none");
           entity.healthDisplay = "none";
@@ -949,6 +1071,152 @@ export class Editor {
         editor.updateWorkingState();
       });
     }
+
+    // Texture enabled checkbox
+    const textureEnabledCheckbox = document.getElementById(
+      "texture-enabled-checkbox"
+    );
+    const texturePropertiesContainer = document.getElementById(
+      "texture-properties-container"
+    );
+    const textureLabel = document.getElementById("texture-label");
+    if (textureEnabledCheckbox && texturePropertiesContainer) {
+      textureEnabledCheckbox.addEventListener("change", (e) => {
+        const enabled = e.target.checked;
+
+        // Update label text based on state
+        if (textureLabel) {
+          textureLabel.textContent = enabled
+            ? "Texture (enabled)"
+            : "Texture (disabled)";
+        }
+
+        // Update collapse icon
+        const collapseIcon = document.querySelector(
+          '.collapse-icon[data-section="texture"]'
+        );
+
+        if (enabled) {
+          texturePropertiesContainer.style.display = "block";
+          if (collapseIcon) collapseIcon.textContent = "▼";
+          // Set default texture URL if empty
+          if (
+            !entity.config.textureUrl ||
+            entity.config.textureUrl.trim() === ""
+          ) {
+            entity.updateConfigProperty("textureUrl", "canvas://checkerboard");
+            entity.updateConfigProperty("textureScaleX", 1);
+            entity.updateConfigProperty("textureScaleY", 1);
+            entity.textureLoaded = false; // Force reload
+            this.updatePropertiesPanel();
+          }
+        } else {
+          texturePropertiesContainer.style.display = "none";
+          if (collapseIcon) collapseIcon.textContent = "▶";
+          // Clear texture
+          entity.updateConfigProperty("textureUrl", "");
+          if (entity.body.render.sprite) {
+            entity.body.render.sprite = null;
+          }
+          entity.body.render.visible = true; // Show solid color again
+          entity.textureLoaded = false;
+        }
+      });
+    }
+
+    // Texture URL input
+    const textureUrlInput = document.getElementById("prop-textureUrl");
+    if (textureUrlInput) {
+      textureUrlInput.addEventListener("input", (e) => {
+        const url = e.target.value.trim();
+        entity.updateConfigProperty("textureUrl", url);
+
+        if (url === "") {
+          // Clear texture
+          if (entity.body.render.sprite) {
+            entity.body.render.sprite = null;
+          }
+          entity.body.render.visible = true;
+          entity.textureLoaded = false;
+        } else {
+          // Load new texture
+          entity.textureLoaded = false; // Force reload on next update
+        }
+      });
+    }
+
+    // Texture Scale X
+    const textureScaleXInput = document.getElementById("prop-textureScaleX");
+    if (textureScaleXInput) {
+      textureScaleXInput.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        entity.updateConfigProperty("textureScaleX", value);
+        if (entity.body.render.sprite) {
+          entity.body.render.sprite.xScale = value;
+        }
+      });
+    }
+
+    // Texture Scale Y
+    const textureScaleYInput = document.getElementById("prop-textureScaleY");
+    if (textureScaleYInput) {
+      textureScaleYInput.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        entity.updateConfigProperty("textureScaleY", value);
+        if (entity.body.render.sprite) {
+          entity.body.render.sprite.yScale = value;
+        }
+      });
+    }
+  }
+
+  attachSectionCollapseListeners() {
+    // Add click handlers for collapsible sections WITHOUT checkboxes
+    const sectionHeaders = document.querySelectorAll(".section-header");
+    sectionHeaders.forEach((header) => {
+      header.addEventListener("click", (e) => {
+        const section = header.dataset.section;
+        const container = document.getElementById(
+          `${section}-properties-container`
+        );
+        const icon = header.querySelector(".collapse-icon");
+
+        if (container) {
+          if (container.style.display === "none") {
+            container.style.display = "block";
+            if (icon) icon.textContent = "▼";
+          } else {
+            container.style.display = "none";
+            if (icon) icon.textContent = "▶";
+          }
+        }
+      });
+    });
+
+    // Add click handlers for collapse icons in sections WITH checkboxes
+    const collapseIcons = document.querySelectorAll(
+      ".collapse-icon[data-section]"
+    );
+    collapseIcons.forEach((icon) => {
+      icon.addEventListener("click", (e) => {
+        e.stopPropagation(); // Prevent event bubbling
+        const section = icon.dataset.section;
+        const container = document.getElementById(
+          `${section}-properties-container`
+        );
+
+        if (container) {
+          // Toggle display and icon
+          if (container.style.display === "none") {
+            container.style.display = "block";
+            icon.textContent = "▼";
+          } else {
+            container.style.display = "none";
+            icon.textContent = "▶";
+          }
+        }
+      });
+    });
   }
 
   renderCollisionGroups(entity) {
@@ -1319,6 +1587,11 @@ export class Editor {
     // Clear liquids array
     if (this.game.gameEngine && this.game.gameEngine.liquids) {
       this.game.gameEngine.liquids = [];
+    }
+
+    // Clear cloths array
+    if (this.game.gameEngine && this.game.gameEngine.cloths) {
+      this.game.gameEngine.cloths = [];
     }
 
     // Recreate entities from state

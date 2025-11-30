@@ -206,6 +206,30 @@ export class LevelConfig extends Config {
           label: "box_3",
         },
 
+        // Textured box with canvas-generated checkerboard
+        {
+          x: 0,
+          y: -150,
+          width: 80,
+          height: 80,
+          rotation: 0,
+          color: "#cccccc",
+          strokeColor: null,
+          strokeWidth: 0,
+          friction: 0.3,
+          frictionAir: 0.01,
+          restitution: 0,
+          density: 0.001,
+          isStatic: true,
+          health: 100,
+          maxHealth: 100,
+          healthDisplay: "none",
+          label: "textured_box",
+          textureUrl: "canvas://checkerboard",
+          textureScaleX: 1,
+          textureScaleY: 1,
+        },
+
         // Circles
         {
           x: -300,

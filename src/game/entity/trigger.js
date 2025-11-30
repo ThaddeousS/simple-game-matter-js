@@ -49,6 +49,11 @@ export class Trigger extends Entity {
   }
 
   update() {
+    // Call parent update for texture loading
+    if (super.update) {
+      super.update();
+    }
+
     // Update visibility based on debug panel state
     const infoPanel = document.getElementById("info");
     const isPanelVisible = infoPanel && infoPanel.style.display !== "none";

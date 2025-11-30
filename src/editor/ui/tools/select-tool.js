@@ -306,22 +306,7 @@ export class SelectTool extends Tool {
       this.currentSubTool.renderWidget(ctx, camera);
     }
 
-    // Draw mode indicator
-    ctx.fillStyle = this.highlightColor;
-    ctx.font = "bold 12px Arial";
-    ctx.textAlign = "center";
-    const offset =
-      this.selectedEntity.config.shape === "circle"
-        ? this.selectedEntity.config.radius
-        : Math.max(
-            this.selectedEntity.config.height / 2,
-            this.selectedEntity.config.width / 2
-          );
-    ctx.fillText(
-      this.transformMode.toUpperCase(),
-      screenX,
-      screenY - offset * scale - 20
-    );
+    // Mode indicator removed - no longer drawing label above entity
   }
 
   isPointInEntity(point, entity) {
@@ -343,6 +328,28 @@ export class SelectTool extends Tool {
       return (
         Math.abs(rotatedX) <= halfWidth && Math.abs(rotatedY) <= halfHeight
       );
+    }
+  }
+
+  onKeyDown(e) {
+    // Only handle keyboard shortcuts when an entity is selected
+    if (!this.selectedEntity) {
+      return;
+    }
+
+    // Handle transform mode shortcuts
+    if (e.key === "r" || e.key === "R") {
+      e.preventDefault();
+      e.stopPropagation();
+      this.setTransformMode("rotate");
+    } else if (e.key === "s" || e.key === "S") {
+      e.preventDefault();
+      e.stopPropagation();
+      this.setTransformMode("scale");
+    } else if (e.key === "m" || e.key === "M") {
+      e.preventDefault();
+      e.stopPropagation();
+      this.setTransformMode("move");
     }
   }
 }

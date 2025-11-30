@@ -30,6 +30,11 @@ export class EntityConfig extends Config {
       strokeColor: null,
       strokeWidth: 0,
 
+      // Texture
+      textureUrl: "",
+      textureScaleX: 1,
+      textureScaleY: 1,
+
       // Physics
       friction: 0.3,
       frictionAir: 0.01,

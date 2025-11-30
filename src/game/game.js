@@ -132,7 +132,7 @@ export class Game {
       options: {
         width: dimensions.width,
         height: dimensions.height,
-        wireframes: this.wireframes,
+        wireframes: false, // Set to false to enable sprite rendering
         background: "#2c3e50",
         showSensors: true, // Show sensor bodies (triggers, liquids, etc.)
       },
@@ -233,7 +233,33 @@ export class Game {
 
     // Hook into Matter.js render events to draw health displays and debug labels
     const { Events } = Matter;
+
+    // Render AFTER Matter.js completes its rendering
     Events.on(this.render, "afterRender", () => {
+      // Get canvas element directly (not from render.context)
+      const canvas = this.render.canvas;
+      const freshContext = canvas.getContext("2d");
+
+      // Matter.js has finished rendering, now we add sprites on top
+      const render = this.render;
+      const bounds = render.bounds;
+
+      freshContext.save();
+
+      // Apply the same transform Matter.js used
+      const boundsWidth = bounds.max.x - bounds.min.x;
+      const boundsHeight = bounds.max.y - bounds.min.y;
+      const boundsScaleX = render.options.width / boundsWidth;
+      const boundsScaleY = render.options.height / boundsHeight;
+
+      freshContext.scale(boundsScaleX, boundsScaleY);
+      freshContext.translate(-bounds.min.x, -bounds.min.y);
+
+      // Custom sprite rendering with fresh context
+      this.renderSprites(freshContext);
+
+      freshContext.restore();
+
       // Check if info panel is visible
       const infoPanel = document.getElementById("info");
       const isPanelVisible = infoPanel && infoPanel.style.display !== "none";
@@ -265,6 +291,103 @@ export class Game {
           detail: { context, camera: this.camera },
         })
       );
+    });
+  }
+
+  renderSprites(context) {
+    // Custom sprite rendering - Matter.js default renderer doesn't render sprites
+    // We need to manually draw textured bodies
+
+    const bodies = Matter.Composite.allBodies(this.world);
+
+    bodies.forEach((body) => {
+      // Check if body has a sprite texture
+      if (!body.render || !body.render.sprite || !body.render.sprite.texture) {
+        return;
+      }
+
+      const sprite = body.render.sprite;
+
+      // Get or create cached image
+      if (!sprite._image) {
+        sprite._image = new Image();
+        sprite._image.src = sprite.texture;
+      }
+
+      const img = sprite._image;
+
+      // Get body dimensions from vertices (unaffected by rotation)
+      // Calculate the local space dimensions by finding the extents
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+
+      // For each vertex, transform it to local space (relative to body center)
+      body.vertices.forEach((vertex) => {
+        const localX = vertex.x - body.position.x;
+        const localY = vertex.y - body.position.y;
+
+        // Rotate back to original orientation
+        const cos = Math.cos(-body.angle);
+        const sin = Math.sin(-body.angle);
+        const rotatedX = localX * cos - localY * sin;
+        const rotatedY = localX * sin + localY * cos;
+
+        minX = Math.min(minX, rotatedX);
+        minY = Math.min(minY, rotatedY);
+        maxX = Math.max(maxX, rotatedX);
+        maxY = Math.max(maxY, rotatedY);
+      });
+
+      const width = maxX - minX;
+      const height = maxY - minY;
+
+      context.save();
+
+      // Transform to body position and rotation
+      context.translate(body.position.x, body.position.y);
+      context.rotate(body.angle);
+
+      // Check if we have a valid image/canvas
+      const isCanvas = img instanceof HTMLCanvasElement;
+      const isImage = img instanceof HTMLImageElement;
+      const isReady =
+        isCanvas || (isImage && img.complete && img.naturalWidth > 0);
+
+      if (isReady) {
+        // Draw texture to match body bounds exactly
+        // (Don't use sprite.xScale/yScale - texture should fill the body)
+        const drawWidth = width;
+        const drawHeight = height;
+
+        // Get image dimensions
+        const imgWidth = img.width;
+        const imgHeight = img.height;
+
+        try {
+          // Draw the texture (works for both canvas and image)
+          context.drawImage(
+            img,
+            0,
+            0,
+            imgWidth,
+            imgHeight,
+            -drawWidth / 2,
+            -drawHeight / 2,
+            drawWidth,
+            drawHeight
+          );
+        } catch (e) {
+          console.error("✗ Failed to draw texture:", e);
+        }
+      } else {
+        // Not ready - draw fallback color rect
+        context.fillStyle = body.render.fillStyle || "#cccccc";
+        context.fillRect(-width / 2, -height / 2, width, height);
+      }
+
+      context.restore();
     });
   }
 
