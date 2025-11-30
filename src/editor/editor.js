@@ -9,11 +9,13 @@ import { EditorUI } from "./ui/editor-ui.js";
 import { GameEvents } from "../events/game-events.js";
 import { Styles } from "../styles/styles.js";
 import { Liquid } from "../game/entity/liquid.js";
+import { CreateWorldDialog } from "../dialog/create-world-dialog.js";
+import { EditorEvents } from "../events/editor-events.js";
 import Matter from "matter-js";
 
 export class Editor {
-  constructor(game) {
-    this.game = game;
+  constructor() {
+    this.game = null;
     this.isActive = false;
     this.currentTool = "select";
 
@@ -35,6 +37,15 @@ export class Editor {
     // Track entities that have been manually deleted (to not recreate on reset)
     this.deletedEntityIds = new Set();
 
+    // Listen for game lifecycle events
+    window.addEventListener(GameEvents.GAME_CREATED, (e) => {
+      this.game = e.detail.game;
+    });
+
+    window.addEventListener(GameEvents.GAME_INITIALIZED, (e) => {
+      this.onGameInitialized();
+    });
+
     // Initialize tools
     this.tools = {
       select: new SelectTool(this),
@@ -48,8 +59,39 @@ export class Editor {
     this.ui = new EditorUI(this);
     this.ui.create();
 
+    // Create CreateWorldDialog
+    this.createWorldDialog = new CreateWorldDialog(
+      (manualSettings, configPaths) => {
+        // Dispatch event to create world with both manual settings and config paths
+        window.dispatchEvent(
+          new CustomEvent(EditorEvents.WORLD_CREATED, {
+            detail: { manualSettings, configPaths },
+          })
+        );
+      }
+    );
+
     this.setupMouseNavigation();
     this.setupGameEventListeners();
+  }
+
+  onGameInitialized() {
+    // Setup things that need the game to be initialized
+    if (!this.game) return;
+
+    // Setup debug panel
+    this.game.debug.setupHeaderClickListener(() => {
+      this.game.toggleInfoPanel();
+    });
+
+    // Setup mouse navigation now that game exists
+    this.setupMouseNavigation();
+
+    // Setup canvas listeners now that game exists
+    this.ui.setupCanvasListeners();
+
+    // Capture initial state
+    this.saveWorkingState();
   }
 
   setupGameEventListeners() {
@@ -83,6 +125,11 @@ export class Editor {
   }
 
   async initialize() {
+    // If no game exists yet, just resolve
+    if (!this.game) {
+      return Promise.resolve();
+    }
+
     // Wait for next frame to ensure game is fully initialized
     return new Promise((resolve) => {
       requestAnimationFrame(() => {
@@ -118,6 +165,11 @@ export class Editor {
   }
 
   setupMouseNavigation() {
+    // Wait until game is created to setup mouse navigation
+    if (!this.game || !this.game.render) {
+      return;
+    }
+
     const canvas = this.game.render.canvas;
 
     canvas.addEventListener("mousedown", (e) => {
@@ -1476,6 +1528,11 @@ export class Editor {
       this.ui.hide();
     }
 
+    // If game doesn't exist yet, just toggle UI
+    if (!this.game || !this.game.render) {
+      return;
+    }
+
     const canvas = this.game.render.canvas;
 
     if (this.isActive) {
@@ -1498,8 +1555,11 @@ export class Editor {
   show() {
     this.isActive = true;
     this.ui.show();
-    this.game.pauseSimulation();
-    this.game.render.canvas.style.cursor = "grab";
+
+    if (this.game && this.game.render) {
+      this.game.pauseSimulation();
+      this.game.render.canvas.style.cursor = "grab";
+    }
   }
 
   hide() {
@@ -1547,6 +1607,11 @@ export class Editor {
   }
 
   saveWorkingState() {
+    // Guard: ensure game exists
+    if (!this.game) {
+      return;
+    }
+
     // Save current game state as working state
     const { Body } = Matter;
 

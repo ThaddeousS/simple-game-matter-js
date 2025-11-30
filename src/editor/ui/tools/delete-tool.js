@@ -10,11 +10,15 @@ export class DeleteTool extends Tool {
   }
 
   onActivate() {
-    this.editor.game.render.canvas.style.cursor = "not-allowed";
+    if (this.editor.game && this.editor.game.render) {
+      this.editor.game.render.canvas.style.cursor = "not-allowed";
+    }
   }
 
   onDeactivate() {
-    this.editor.game.render.canvas.style.cursor = "grab";
+    if (this.editor.game && this.editor.game.render) {
+      this.editor.game.render.canvas.style.cursor = "grab";
+    }
     // Clear selection box on deactivate
     this.isSelecting = false;
     this.selectionStart = null;

@@ -5,7 +5,7 @@ import { LevelConfig } from "../config/level-config.js";
 import { Engine } from "./engine/engine.js";
 import { World } from "./world/world.js";
 import { Debug } from "../debug/debug.js";
-import { GameOverDialog } from "./ui/dialog/game-over-dialog.js";
+import { GameOverDialog } from "../dialog/game-over-dialog.js";
 import { GameEvents } from "../events/game-events.js";
 
 export class Game {

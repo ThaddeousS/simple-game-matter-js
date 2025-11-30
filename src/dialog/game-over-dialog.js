@@ -1,5 +1,5 @@
 import { Dialog } from "./dialog.js";
-import { Styles } from "../../../styles/styles.js";
+import { Styles } from "../styles/styles.js";
 
 export class GameOverDialog extends Dialog {
   constructor(onReset) {

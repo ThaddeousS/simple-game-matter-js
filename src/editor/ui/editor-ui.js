@@ -44,9 +44,18 @@ export class EditorUI {
   }
 
   setupEventListeners() {
-    const canvas = this.editor.game.render.canvas;
+    // Setup UI button listeners (don't need canvas)
 
     // Top toolbar buttons
+    const createWorldBtn = document.getElementById("editor-create-world-btn");
+    if (createWorldBtn) {
+      createWorldBtn.addEventListener("click", () => {
+        if (this.editor.createWorldDialog) {
+          this.editor.createWorldDialog.open();
+        }
+      });
+    }
+
     const revertBtn = document.getElementById("editor-revert-btn");
     if (revertBtn) {
       revertBtn.addEventListener("click", () => this.editor.revertToDefault());
@@ -117,6 +126,15 @@ export class EditorUI {
         this.editor.selectTool("delete")
       );
     }
+  }
+
+  setupCanvasListeners() {
+    // Only setup canvas listeners when game exists
+    if (!this.editor.game || !this.editor.game.render) {
+      return;
+    }
+
+    const canvas = this.editor.game.render.canvas;
 
     // Canvas events for tools
     canvas.addEventListener("contextmenu", (e) => {

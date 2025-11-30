@@ -212,6 +212,11 @@ export class EntityTool extends Tool {
 
     // Close menu when clicking elsewhere
     document.addEventListener("mousedown", (e) => {
+      // Guard: check if game exists
+      if (!this.editor.game || !this.editor.game.render) {
+        return;
+      }
+
       const canvas = this.editor.game.render.canvas;
       const clickedCanvas = e.target === canvas;
       const clickedMenu = this.contextMenu.contains(e.target);
@@ -440,12 +445,16 @@ export class EntityTool extends Tool {
   }
 
   onActivate() {
-    this.editor.game.render.canvas.style.cursor = "crosshair";
+    if (this.editor.game && this.editor.game.render) {
+      this.editor.game.render.canvas.style.cursor = "crosshair";
+    }
   }
 
   onDeactivate() {
     this.hideContextMenu();
-    this.editor.game.render.canvas.style.cursor = "grab";
+    if (this.editor.game && this.editor.game.render) {
+      this.editor.game.render.canvas.style.cursor = "grab";
+    }
   }
 
   onMouseDown(e, worldPos) {

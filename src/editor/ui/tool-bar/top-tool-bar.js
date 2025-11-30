@@ -8,6 +8,7 @@ export class TopToolBar extends ToolBar {
 
   createContent() {
     const html = `
+                    <button class="editor-btn" id="editor-create-world-btn" style="${Styles.editorButton}">Create World</button>
                     <button class="editor-btn" id="editor-revert-btn" style="${Styles.buttonWarning}">Reset</button>
                     <button class="editor-btn" id="editor-save-btn" style="${Styles.editorButton}">Save</button>
                     <button class="editor-btn" id="editor-load-btn" style="${Styles.editorButton}">Load</button>
