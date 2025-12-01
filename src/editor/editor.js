@@ -11,6 +11,8 @@ import { Styles } from "../styles/styles.js";
 import { Liquid } from "../game/entity/liquid.js";
 import { CreateWorldDialog } from "../dialog/create-world-dialog.js";
 import { EditorEvents } from "../events/editor-events.js";
+import { EditorMouseManager } from "./editor-mouse-manager.js";
+import { SaveConfigsDialog } from "../dialog/save-configs-dialog.js";
 import Matter from "matter-js";
 
 export class Editor {
@@ -18,13 +20,6 @@ export class Editor {
     this.game = null;
     this.isActive = false;
     this.currentTool = "select";
-
-    // Mouse navigation
-    this.isDragging = false;
-    this.dragStartX = 0;
-    this.dragStartY = 0;
-    this.cameraStartX = 0;
-    this.cameraStartY = 0;
 
     // Toolbar widths
     this.leftToolbarDefaultWidth = 180;
@@ -36,6 +31,9 @@ export class Editor {
 
     // Track entities that have been manually deleted (to not recreate on reset)
     this.deletedEntityIds = new Set();
+
+    // Initialize mouse manager
+    this.mouseManager = new EditorMouseManager(this);
 
     // Listen for game lifecycle events
     window.addEventListener(GameEvents.GAME_CREATED, (e) => {
@@ -71,7 +69,12 @@ export class Editor {
       }
     );
 
-    this.setupMouseNavigation();
+    // Create SaveConfigsDialog
+    this.saveConfigsDialog = new SaveConfigsDialog(
+      () => this.showSaveDialog(), // Save level config
+      () => this.showSaveGameConfigDialog() // Save game config
+    );
+
     this.setupGameEventListeners();
   }
 
@@ -79,13 +82,19 @@ export class Editor {
     // Setup things that need the game to be initialized
     if (!this.game) return;
 
+    // Close editor UI without calling pause/resume (game starts in running state)
+    this.isActive = false;
+    if (this.ui && this.ui.container) {
+      this.ui.container.style.display = "none";
+    }
+
     // Setup debug panel
     this.game.debug.setupHeaderClickListener(() => {
       this.game.toggleInfoPanel();
     });
 
     // Setup mouse navigation now that game exists
-    this.setupMouseNavigation();
+    this.mouseManager.initialize();
 
     // Setup canvas listeners now that game exists
     this.ui.setupCanvasListeners();
@@ -102,10 +111,24 @@ export class Editor {
 
     // Listen for reset request
     window.addEventListener(GameEvents.REQUEST_RESET, (e) => {
+      // Handle reset by reverting to working state
       if (this.defaultState) {
-        // Handle the reset
         this.restoreState(this.defaultState);
         e.detail.handled = true;
+      }
+    });
+
+    // Listen for world reset to revert to working state and clear selection
+    window.addEventListener(GameEvents.WORLD_RESET, () => {
+      // Revert to working state when world resets
+      if (this.defaultState) {
+        this.restoreState(this.defaultState);
+      }
+      // Clear selection when world resets
+      if (this.tools.select) {
+        this.tools.select.selectedEntity = null;
+        this.tools.select.selectedEntities = [];
+        this.tools.select.currentSubTool = null;
       }
     });
 
@@ -164,91 +187,6 @@ export class Editor {
     });
   }
 
-  setupMouseNavigation() {
-    // Wait until game is created to setup mouse navigation
-    if (!this.game || !this.game.render) {
-      return;
-    }
-
-    const canvas = this.game.render.canvas;
-
-    canvas.addEventListener("mousedown", (e) => {
-      if (!this.isActive) return;
-
-      // Only start camera dragging if Ctrl key is held
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault(); // Prevent default Ctrl+click behavior
-        this.isDragging = true;
-        this.dragStartX = e.clientX;
-        this.dragStartY = e.clientY;
-        this.cameraStartX = this.game.camera.x;
-        this.cameraStartY = this.game.camera.y;
-        canvas.style.cursor = "grabbing";
-      }
-    });
-
-    canvas.addEventListener("mousemove", (e) => {
-      if (!this.isActive) return;
-
-      // Update cursor based on Ctrl key state
-      if (!this.isDragging) {
-        if (e.ctrlKey || e.metaKey) {
-          canvas.style.cursor = "grab";
-        } else if (this.currentTool) {
-          // Restore tool cursor
-          if (this.currentTool === this.tools.select) {
-            canvas.style.cursor = "default";
-          } else if (this.currentTool === this.tools.entity) {
-            canvas.style.cursor = "crosshair";
-          } else if (this.currentTool === this.tools.delete) {
-            canvas.style.cursor = "not-allowed";
-          }
-        }
-      }
-
-      if (this.isDragging) {
-        // Calculate camera movement in world space (accounting for zoom)
-        const deltaScreenX = e.clientX - this.dragStartX;
-        const deltaScreenY = e.clientY - this.dragStartY;
-
-        // Convert screen space delta to world space delta
-        const scale =
-          this.game.camera.width /
-          (this.game.camera.width / this.game.camera.zoom);
-        const deltaWorldX = deltaScreenX / scale;
-        const deltaWorldY = deltaScreenY / scale;
-
-        // Update camera position (invert for natural dragging)
-        this.game.camera.x = this.cameraStartX - deltaWorldX;
-        this.game.camera.y = this.cameraStartY - deltaWorldY;
-      }
-    });
-
-    canvas.addEventListener("mouseup", () => {
-      if (!this.isActive) return;
-
-      if (this.isDragging) {
-        this.isDragging = false;
-        // Reset cursor based on current tool
-        if (this.currentTool) {
-          if (this.currentTool === this.tools.select) {
-            canvas.style.cursor = "default";
-          } else if (this.currentTool === this.tools.entity) {
-            canvas.style.cursor = "crosshair";
-          } else if (this.currentTool === this.tools.delete) {
-            canvas.style.cursor = "not-allowed";
-          }
-        }
-      }
-    });
-
-    canvas.addEventListener("mouseleave", () => {
-      if (!this.isActive) return;
-
-      this.isDragging = false;
-    });
-  }
-
   selectTool(toolName) {
     // Deactivate current tool
     if (this.currentTool) {
@@ -265,6 +203,22 @@ export class Editor {
     }
   }
 
+  isToolDragging() {
+    // Check if current tool is actively dragging
+    if (this.currentTool && this.currentTool.isDragging) {
+      return true;
+    }
+    // Check sub-tools for transform tools
+    if (
+      this.currentTool &&
+      this.currentTool.currentSubTool &&
+      this.currentTool.currentSubTool.isDragging
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   updatePropertiesPanel() {
     const propertiesDiv = document.getElementById("editor-properties");
     if (!propertiesDiv) return;
@@ -276,8 +230,7 @@ export class Editor {
         : [];
 
     if (selectedEntities.length === 0) {
-      propertiesDiv.innerHTML =
-        '<p style="color: #aaa; font-size: 13px;">Select an object to edit properties</p>';
+      propertiesDiv.innerHTML = `<p style="${Styles.propertyPanelEmpty}">Select an object to edit properties</p>`;
       return;
     }
 
@@ -318,8 +271,8 @@ export class Editor {
       tabs.forEach((tab, index) => {
         tab.addEventListener("click", () => {
           // Update active tab styling
-          tabs.forEach((t) => (t.style.background = "#2c3e50"));
-          tab.style.background = "#3498db";
+          tabs.forEach((t) => (t.style.background = Styles.colorInactive));
+          tab.style.background = Styles.colorActive;
 
           // Show properties for selected entity
           this.showEntityProperties(
@@ -524,11 +477,45 @@ export class Editor {
       0,
       1
     );
+
+    // Add player-specific movement properties if this is the player
+    const isPlayer = entity.config.label === "player";
+    if (isPlayer) {
+      html += this.createPropertyInput(
+        "Move Force",
+        "moveForce",
+        entity.moveForce !== undefined ? entity.moveForce : 0.015,
+        "number",
+        0.001,
+        0.001,
+        1
+      );
+      html +=
+        '<div style="border-top: 1px solid #444; margin-top: 8px; padding-top: 8px;"></div>';
+      html += this.createPropertyInput(
+        "Jump Force",
+        "jumpForce",
+        entity.jumpForce !== undefined ? entity.jumpForce : 0.1,
+        "number",
+        0.001,
+        0.001,
+        1
+      );
+      html += this.createPropertyInput(
+        "Max Speed",
+        "maxSpeed",
+        entity.maxSpeed !== undefined ? entity.maxSpeed : 8,
+        "number",
+        0.5,
+        0.5,
+        20
+      );
+    }
+
     html += "</div>";
     html += "</div>";
 
     // Entity Type section - only show for non-player entities
-    const isPlayer = entity.config.label === "player";
     if (!isPlayer) {
       html += '<div style="border-top: 1px solid #555; padding-top: 8px;">';
       html +=
@@ -564,8 +551,7 @@ export class Editor {
           0,
           1
         );
-        html +=
-          '<div style="color: #aaa; font-size: 10px; margin-top: -6px; margin-bottom: 6px;">0 = no resistance, 1 = maximum</div>';
+        html += `<div style="${Styles.propertyHintText}">0 = no resistance, 1 = maximum</div>`;
       }
 
       html += "</div>";
@@ -677,8 +663,7 @@ export class Editor {
       inputHtml = `
                         <div style="margin-bottom: 6px;">
                             <label style="color: white; font-size: 12px; display: block; margin-bottom: 3px;">${label}</label>
-                            <select id="${inputId}" 
-                                style="width: 100%; padding: 6px; background: #2c3e50; color: white; border: 1px solid #555; border-radius: 3px; font-size: 12px;">
+                            <select id="${inputId}" style="${Styles.propertySelect}">
                                 ${options.map((opt) => `<option value="${opt}" ${opt === value ? "selected" : ""}>${opt}</option>`).join("")}
                             </select>
                         </div>
@@ -691,7 +676,7 @@ export class Editor {
                         <div style="margin-bottom: 6px;">
                             <label style="color: white; font-size: 12px; display: block; margin-bottom: 3px;">${label}</label>
                             <input type="${type}" id="${inputId}" value="${value}" ${minAttr} ${maxAttr} ${stepAttr}
-                                style="width: 100%; padding: 6px; background: #2c3e50; color: white; border: 1px solid #555; border-radius: 3px; font-size: 12px;">
+                                style="${Styles.propertySelect}">
                         </div>
                     `;
     }
@@ -734,14 +719,18 @@ export class Editor {
       const radiusInput = document.getElementById("prop-radius");
       if (radiusInput) {
         radiusInput.addEventListener("input", (e) => {
-          const newRadius = parseFloat(e.target.value);
+          let newRadius = parseFloat(e.target.value);
+          // Clamp radius to minimum of 1
+          if (isNaN(newRadius) || newRadius < 1) {
+            newRadius = 1;
+            e.target.value = 1;
+          }
           Body.scale(
             entity.body,
             newRadius / entity.config.radius,
             newRadius / entity.config.radius
           );
           entity.updateConfigProperty("radius", newRadius);
-          this.updatePropertiesPanel();
         });
       }
     } else {
@@ -749,18 +738,26 @@ export class Editor {
       const heightInput = document.getElementById("prop-height");
       if (widthInput) {
         widthInput.addEventListener("input", (e) => {
-          const newWidth = parseFloat(e.target.value);
+          let newWidth = parseFloat(e.target.value);
+          // Clamp width to minimum of 1
+          if (isNaN(newWidth) || newWidth < 1) {
+            newWidth = 1;
+            e.target.value = 1;
+          }
           Body.scale(entity.body, newWidth / entity.config.width, 1);
           entity.updateConfigProperty("width", newWidth);
-          this.updatePropertiesPanel();
         });
       }
       if (heightInput) {
         heightInput.addEventListener("input", (e) => {
-          const newHeight = parseFloat(e.target.value);
+          let newHeight = parseFloat(e.target.value);
+          // Clamp height to minimum of 1
+          if (isNaN(newHeight) || newHeight < 1) {
+            newHeight = 1;
+            e.target.value = 1;
+          }
           Body.scale(entity.body, 1, newHeight / entity.config.height);
           entity.updateConfigProperty("height", newHeight);
-          this.updatePropertiesPanel();
         });
       }
     }
@@ -771,7 +768,6 @@ export class Editor {
       angleInput.addEventListener("input", (e) => {
         const degrees = parseFloat(e.target.value);
         Body.setAngle(entity.body, (degrees * Math.PI) / 180);
-        this.updatePropertiesPanel();
       });
     }
 
@@ -948,6 +944,34 @@ export class Editor {
         const value = parseFloat(e.target.value);
         entity.updateConfigProperty("density", value);
         Body.setDensity(entity.body, value);
+      });
+    }
+
+    // Player-specific properties - save to both entity properties AND config
+    const moveForceInput = document.getElementById("prop-moveForce");
+    if (moveForceInput) {
+      moveForceInput.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        entity.moveForce = value;
+        entity.updateConfigProperty("moveForce", value);
+      });
+    }
+
+    const jumpForceInput = document.getElementById("prop-jumpForce");
+    if (jumpForceInput) {
+      jumpForceInput.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        entity.jumpForce = value;
+        entity.updateConfigProperty("jumpForce", value);
+      });
+    }
+
+    const maxSpeedInput = document.getElementById("prop-maxSpeed");
+    if (maxSpeedInput) {
+      maxSpeedInput.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        entity.maxSpeed = value;
+        entity.updateConfigProperty("maxSpeed", value);
       });
     }
 
@@ -1404,6 +1428,8 @@ export class Editor {
     // Group entities by type
     const groups = {
       player: [],
+      player_spawn: [],
+      spawn_point: [],
       entity: [],
       cloud: [],
       trigger: [],
@@ -1463,6 +1489,7 @@ export class Editor {
           // Select the entity
           if (this.tools.select) {
             this.tools.select.selectedEntity = entity;
+            this.tools.select.selectedEntities = [entity]; // Set array for consistency
             this.updatePropertiesPanel();
           }
         });
@@ -1490,7 +1517,8 @@ export class Editor {
             // Select and show properties
             if (this.tools.select) {
               this.tools.select.selectedEntity = entity;
-              this.tools.select.setTransformMode("move"); // Activate move widget
+              this.tools.select.selectedEntities = [entity]; // Set array for transform tools
+              this.tools.select.setTransformMode("move"); // Create move widget
               this.updatePropertiesPanel();
             }
           }
@@ -1548,7 +1576,7 @@ export class Editor {
       this.applyWorkingState();
       this.game.resumeSimulation();
       canvas.style.cursor = "default";
-      this.isDragging = false;
+      this.mouseManager.isDragging = false;
     }
   }
 
@@ -1567,7 +1595,7 @@ export class Editor {
     this.ui.hide();
     this.game.resumeSimulation();
     this.game.render.canvas.style.cursor = "default";
-    this.isDragging = false;
+    this.mouseManager.isDragging = false;
   }
 
   saveInitialState() {
@@ -1619,6 +1647,20 @@ export class Editor {
     if (!this.game.player) {
       console.warn("Cannot save working state: player does not exist yet");
       return;
+    }
+
+    // Ensure player's current jumpForce and maxSpeed are in the config
+    if (this.game.player.jumpForce !== undefined) {
+      this.game.player.updateConfigProperty(
+        "jumpForce",
+        this.game.player.jumpForce
+      );
+    }
+    if (this.game.player.maxSpeed !== undefined) {
+      this.game.player.updateConfigProperty(
+        "maxSpeed",
+        this.game.player.maxSpeed
+      );
     }
 
     this.workingState = {
@@ -1776,9 +1818,10 @@ export class Editor {
       this.game.entities.push(entity);
     });
 
-    // Clear selection
+    // Clear selection and update selection array
     if (this.tools.select) {
       this.tools.select.selectedEntity = null;
+      this.tools.select.selectedEntities = [];
       this.tools.select.currentSubTool = null;
     }
 
@@ -1804,7 +1847,7 @@ export class Editor {
 
     dialog.innerHTML = `
                     <h3 style="margin-top: 0; color: #3498db;">Save Level</h3>
-                    <p style="color: #aaa; font-size: 14px;">Choose what to save:</p>
+                    <p style="${Styles.propertyDialogText}">Choose what to save:</p>
                     <div style="display: flex; flex-direction: column; gap: 10px; margin: 20px 0;">
                         <button id="save-level-btn" style="padding: 10px; background: #2ecc71; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
                             Save Level Config
@@ -1843,7 +1886,7 @@ export class Editor {
 
     dialog.innerHTML = `
                     <h3 style="margin-top: 0; color: #3498db;">Load Config</h3>
-                    <p style="color: #aaa; font-size: 14px;">Choose what to load:</p>
+                    <p style="${Styles.propertyDialogText}">Choose what to load:</p>
                     <div style="display: flex; flex-direction: column; gap: 10px; margin: 20px 0;">
                         <button id="load-level-btn" style="padding: 10px; background: #2ecc71; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
                             Load Level Config
@@ -1907,6 +1950,33 @@ export class Editor {
       document.body.removeChild(levelFileInput);
       document.body.removeChild(gameFileInput);
     });
+  }
+
+  showSaveConfigsDialog() {
+    // Open the save configs dialog
+    if (this.saveConfigsDialog) {
+      this.saveConfigsDialog.open();
+    }
+  }
+
+  showSaveGameConfigDialog() {
+    // Export game config
+    this.exportGameConfig();
+  }
+
+  reloadLevel() {
+    // Reload the current level from its original config (not working state)
+    if (!this.game) return;
+
+    // Reset to the level's original config
+    this.game.switchLevel(this.game.levelConfigInstance.getCurrentLevelUrl());
+
+    // Clear working state so it captures fresh state
+    this.workingState = null;
+    this.defaultState = null;
+
+    // Capture new initial state
+    this.saveWorkingState();
   }
 
   async loadLevelConfigFromFile(file) {

@@ -61,19 +61,29 @@ export class EditorUI {
       revertBtn.addEventListener("click", () => this.editor.revertToDefault());
     }
 
-    const saveBtn = document.getElementById("editor-save-btn");
-    if (saveBtn) {
-      saveBtn.addEventListener("click", () => this.editor.showSaveDialog());
+    const reloadLevelBtn = document.getElementById("editor-reload-level-btn");
+    if (reloadLevelBtn) {
+      reloadLevelBtn.addEventListener("click", () => this.editor.reloadLevel());
     }
 
-    const loadBtn = document.getElementById("editor-load-btn");
-    if (loadBtn) {
-      saveBtn.addEventListener("click", () => this.editor.showLoadDialog());
+    const saveBtn = document.getElementById("editor-save-btn");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", () => this.editor.applyWorkingState());
+    }
+
+    const saveConfigsBtn = document.getElementById("editor-save-configs-btn");
+    if (saveConfigsBtn) {
+      saveConfigsBtn.addEventListener("click", () =>
+        this.editor.showSaveConfigsDialog()
+      );
     }
 
     const exitBtn = document.getElementById("editor-exit-btn");
     if (exitBtn) {
-      exitBtn.addEventListener("click", () => this.editor.toggle());
+      exitBtn.addEventListener("click", () => {
+        this.editor.applyWorkingState();
+        this.editor.toggle();
+      });
     }
 
     // Left toolbar tabs
@@ -144,7 +154,10 @@ export class EditorUI {
     });
 
     canvas.addEventListener("mousedown", (e) => {
-      if (!this.editor.isActive || this.editor.isDragging) return;
+      if (!this.editor.isActive) return;
+
+      // Don't trigger tool events if Ctrl is held (camera drag mode)
+      if (e.ctrlKey || e.metaKey) return;
 
       // Don't trigger tool events if clicking on context menu
       if (
@@ -161,8 +174,16 @@ export class EditorUI {
       this.editor.currentTool.onMouseDown(e, worldPos);
     });
 
-    canvas.addEventListener("mousemove", (e) => {
+    // Use document-level listeners for mousemove and mouseup to handle dragging outside canvas
+    document.addEventListener("mousemove", (e) => {
       if (!this.editor.isActive) return;
+
+      // Don't send events to tools if clicking on editor UI
+      if (e.target.closest("#editor-container")) return;
+
+      // Allow tool events during tool dragging, only skip for camera dragging
+      if (this.editor.mouseManager.isDragging && !this.editor.isToolDragging())
+        return;
 
       const rect = canvas.getBoundingClientRect();
       const screenX = e.clientX - rect.left;
@@ -172,8 +193,15 @@ export class EditorUI {
       this.editor.currentTool.onMouseMove(e, worldPos);
     });
 
-    canvas.addEventListener("mouseup", (e) => {
+    document.addEventListener("mouseup", (e) => {
       if (!this.editor.isActive) return;
+
+      // Don't send events to tools if clicking on editor UI
+      if (e.target.closest("#editor-container")) return;
+
+      // Allow tool events during tool dragging, only skip for camera dragging
+      if (this.editor.mouseManager.isDragging && !this.editor.isToolDragging())
+        return;
 
       const rect = canvas.getBoundingClientRect();
       const screenX = e.clientX - rect.left;

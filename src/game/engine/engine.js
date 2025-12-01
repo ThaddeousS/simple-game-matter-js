@@ -3,6 +3,8 @@ import { Entity } from "../entity/entity";
 import { Cloud } from "../entity/cloud";
 import { Player } from "../entity/player/player";
 import { InputHandler } from "../../input/input-handler.js";
+import { PlayerSpawnPoint } from "../entity/spawn-point/player-spawn-point.js";
+import { Liquid } from "../entity/liquid.js";
 import Matter from "matter-js";
 
 export class Engine {
@@ -35,14 +37,14 @@ export class Engine {
     // Initialize input handler
     this.input = new InputHandler();
 
-    // Bind input actions
-    this.input.bindAction("moveLeft", ["ArrowLeft", "a", "A"]);
-    this.input.bindAction("moveRight", ["ArrowRight", "d", "D"]);
-    this.input.bindAction("jump", ["ArrowUp", "w", "W", " "]);
+    // Bind input actions - Arrow keys and Space only
+    this.input.bindAction("moveLeft", ["ArrowLeft"]);
+    this.input.bindAction("moveRight", ["ArrowRight"]);
+    this.input.bindAction("jump", [" "]); // Space bar only
   }
 
   createPlayer() {
-    // Create player with config
+    // Prepare player config
     let playerConfig = { ...this.playerConfig };
 
     // Apply level-specific overrides if they exist
@@ -50,6 +52,27 @@ export class Engine {
       playerConfig = { ...playerConfig, ...this.levelData.overrides.player };
     }
 
+    // Check if there's a player spawn point in the level
+    if (this.levelData.playerSpawn) {
+      // Create the player spawn point
+      this.playerSpawnPoint = new PlayerSpawnPoint(
+        this.levelData.playerSpawn,
+        this.matterWorld
+      );
+
+      // Add spawn point to entities so it shows in hierarchy
+      this.entities.push(this.playerSpawnPoint);
+
+      // Spawn the player from the spawn point with the player config
+      this.player = this.playerSpawnPoint.spawnPlayer(
+        playerConfig,
+        this.matterWorld
+      );
+
+      return this.player;
+    }
+
+    // Fallback to legacy player creation (no spawn point)
     this.player = new Player(playerConfig, this.matterWorld);
     return this.player;
   }
@@ -103,6 +126,14 @@ export class Engine {
     Events.on(this.matterEngine, "collisionStart", (event) => {
       event.pairs.forEach((pair) => {
         const { bodyA, bodyB } = pair;
+
+        // Check if player is involved in collision (to reset jump)
+        if (this.player && !this.player.isDestroyed) {
+          if (bodyA === this.player.body || bodyB === this.player.body) {
+            const otherBody = bodyA === this.player.body ? bodyB : bodyA;
+            this.player.handleCollisionStart(otherBody);
+          }
+        }
 
         // Check for kill box collisions
         if (killBoxes.some((kb) => kb === bodyA || kb === bodyB)) {

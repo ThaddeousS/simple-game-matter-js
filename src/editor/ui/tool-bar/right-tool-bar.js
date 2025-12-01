@@ -3,10 +3,7 @@ import { Styles } from "../../../styles/styles.js";
 
 export class RightToolBar extends ToolBar {
   constructor(defaultWidth) {
-    super(
-      "editor-right-toolbar",
-      `${Styles.editorRightToolbar} padding-bottom: 300px;`
-    );
+    super("editor-right-toolbar", Styles.editorRightToolbarWithPadding);
     this.defaultWidth = defaultWidth;
   }
 
@@ -21,12 +18,12 @@ export class RightToolBar extends ToolBar {
 
   createContent() {
     const html = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div style="${Styles.toolbarHeaderContainer}">
                         <button id="right-expand-btn" style="${Styles.editorExpandButton}">◀</button>
-                        <h3 style="margin: 0; font-size: 16px; text-align: right;">Properties</h3>
+                        <h3 style="${Styles.propertiesPanelTitle}">Properties</h3>
                     </div>
                     <div id="editor-properties">
-                        <p style="color: #aaa; font-size: 13px;">Select an object to edit properties</p>
+                        <p style="${Styles.propertiesPanelEmpty}">Select an object to edit properties</p>
                     </div>
                 `;
     this.setContent(html);

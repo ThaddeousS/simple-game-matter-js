@@ -5,10 +5,16 @@ export class Player extends Entity {
   constructor(config, world) {
     // Add player-specific defaults to config
     const playerConfig = {
+      shape: "rectangle",
+      width: 30,
+      height: 75,
+      friction: 0.01,
+      density: 0.03,
+      chamfer: { radius: 15 }, // Rounded corners for pill shape
       ...config,
       label: "player",
-      moveForce: config.moveForce || 0.001,
-      jumpForce: config.jumpForce || 0.015,
+      moveForce: config.moveForce || 0.03,
+      jumpForce: config.jumpForce || 1.2,
       maxSpeed: config.maxSpeed || 8,
     };
 
@@ -19,6 +25,14 @@ export class Player extends Entity {
     this.moveForce = playerConfig.moveForce;
     this.jumpForce = playerConfig.jumpForce;
     this.maxSpeed = playerConfig.maxSpeed;
+
+    // Jump state tracking
+    this.canJump = true; // Can player jump right now
+    this.wasJumpPressed = false; // Was jump pressed last frame
+
+    // Prevent rotation by setting infinite inertia
+    const { Body } = Matter;
+    Body.setInertia(this.body, Infinity);
   }
 
   update() {
@@ -64,12 +78,28 @@ export class Player extends Entity {
       }
     }
 
-    // Jump (only if player is roughly on the ground - check vertical velocity)
-    if (input.isActionPressed("jump") && Math.abs(this.body.velocity.y) < 1) {
+    // Jump - only on key press (not hold) and only when canJump is true
+    const isJumpPressed = input.isActionPressed("jump");
+    const isJumpJustPressed = isJumpPressed && !this.wasJumpPressed;
+    this.wasJumpPressed = isJumpPressed;
+
+    if (isJumpJustPressed && this.canJump) {
       Body.applyForce(this.body, this.body.position, {
         x: 0,
         y: -this.jumpForce,
       });
+      this.canJump = false; // Prevent jumping again until grounded
     }
+  }
+
+  // Reset jump when player collides with something (called by collision handler)
+  handleCollisionStart(otherBody) {
+    // Call parent collision handler if it exists
+    if (super.handleCollisionStart) {
+      super.handleCollisionStart(otherBody);
+    }
+
+    // Reset jump ability when touching any entity
+    this.canJump = true;
   }
 }

@@ -36,7 +36,7 @@ export class EntityConfig extends Config {
       textureScaleY: 1,
 
       // Physics
-      friction: 0.3,
+      friction: 0.01,
       frictionAir: 0.01,
       restitution: 0,
       density: 0.001,

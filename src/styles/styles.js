@@ -216,6 +216,8 @@ export class Styles {
                 font-size: 11px;
                 cursor: pointer;
                 transition: background 0.2s;
+                user-select: none;
+                pointer-events: auto;
             `;
 
   static hierarchyItemHover = `
@@ -225,6 +227,8 @@ export class Styles {
                 font-size: 11px;
                 cursor: pointer;
                 transition: background 0.2s;
+                user-select: none;
+                pointer-events: auto;
             `;
 
   // Common utility styles
@@ -389,6 +393,217 @@ export class Styles {
                 font-size: 14px;
                 font-weight: bold;
                 line-height: 1;
+            `;
+
+  // Create World Dialog styles
+  static createWorldDialog = `
+                display: none;
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(20, 20, 30, 0.98);
+                border: 3px solid #3498db;
+                border-radius: 10px;
+                padding: 30px;
+                z-index: 10000;
+                min-width: 500px;
+                max-width: 600px;
+                box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+                max-height: 80vh;
+                overflow-y: auto;
+            `;
+
+  static createWorldDialogTitle = `
+                color: #3498db;
+                margin: 0 0 20px 0;
+                font-size: 24px;
+                text-align: center;
+            `;
+
+  static createWorldDialogForm = `
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            `;
+
+  static createWorldDialogSection = `
+                border: 1px solid #555;
+                border-radius: 8px;
+                padding: 20px;
+                background: rgba(255, 255, 255, 0.05);
+            `;
+
+  static createWorldDialogSectionTitle = `
+                color: #3498db;
+                margin: 0 0 15px 0;
+                font-size: 16px;
+            `;
+
+  static createWorldDialogLabel = `
+                color: white;
+                font-size: 14px;
+                display: block;
+                margin-bottom: 5px;
+            `;
+
+  static createWorldDialogInput = `
+                padding: 8px;
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid #555;
+                border-radius: 4px;
+                color: white;
+                font-size: 14px;
+                width: 100%;
+                margin-bottom: 15px;
+            `;
+
+  static createWorldDialogCheckboxContainer = `
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 10px;
+            `;
+
+  static createWorldDialogDivider = `
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                margin: 10px 0;
+            `;
+
+  static createWorldDialogDividerLine = `
+                flex: 1;
+                height: 1px;
+                background: #555;
+            `;
+
+  static createWorldDialogDividerText = `
+                color: #7f8c8d;
+                font-size: 14px;
+                font-weight: bold;
+            `;
+
+  static createWorldDialogButtonsContainer = `
+                display: flex;
+                gap: 10px;
+                margin-top: 20px;
+                justify-content: center;
+            `;
+
+  static createWorldDialogCreateButton = `
+                padding: 12px 30px;
+                background: #3498db;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: bold;
+            `;
+
+  static createWorldDialogCancelButton = `
+                padding: 12px 30px;
+                background: #7f8c8d;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+            `;
+
+  // Toolbar specific styles
+  static editorExitButton = `
+                background: #e74c3c;
+                padding: 8px 20px;
+                font-size: 14px;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+            `;
+
+  static toolbarHeaderContainer = `
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 10px;
+            `;
+
+  static toolbarTabContainer = `
+                display: flex;
+                gap: 5px;
+            `;
+
+  static toolsTabContent = `
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            `;
+
+  static propertiesPanelTitle = `
+                margin: 0;
+                font-size: 16px;
+                text-align: right;
+            `;
+
+  static propertiesPanelEmpty = `
+                color: #aaa;
+                font-size: 13px;
+            `;
+
+  static editorRightToolbarWithPadding = `
+                position: absolute;
+                top: 60px;
+                right: 0;
+                bottom: 20px;
+                background: rgba(30, 30, 30, 0.95);
+                border-left: 2px solid #3498db;
+                border-top: 2px solid #3498db;
+                border-bottom: 2px solid #3498db;
+                border-top-left-radius: 8px;
+                border-bottom-left-radius: 8px;
+                pointer-events: all;
+                overflow-y: auto;
+                padding: 15px;
+                color: white;
+                padding-bottom: 300px;
+                user-select: none;
+            `;
+
+  // Color constants
+  static colorInactive = "#2c3e50";
+  static colorActive = "#3498db";
+  static colorGray = "#aaa";
+
+  // Property panel text styles
+  static propertyPanelEmpty = `
+                color: #aaa;
+                font-size: 13px;
+            `;
+
+  static propertyHintText = `
+                color: #aaa;
+                font-size: 10px;
+                margin-top: -6px;
+                margin-bottom: 6px;
+            `;
+
+  static propertyDialogText = `
+                color: #aaa;
+                font-size: 14px;
+            `;
+
+  // Form input styles
+  static propertySelect = `
+                width: 100%;
+                padding: 6px;
+                background: #2c3e50;
+                color: white;
+                border: 1px solid #555;
+                border-radius: 3px;
+                font-size: 12px;
             `;
 
   // Dialog styles

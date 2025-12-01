@@ -227,6 +227,106 @@ export class Game {
     this.camera.followEnabled = true;
   }
 
+  handleKeyboardShortcuts() {
+    // Track previous key states to detect key press (not hold)
+    if (!this.prevKeyStates) {
+      this.prevKeyStates = {};
+    }
+
+    // Helper to check if key was just pressed (not held)
+    const wasJustPressed = (key) => {
+      const keyLower = key.toLowerCase();
+      const keyUpper = key.toUpperCase();
+
+      // Check if either case is currently pressed
+      const isPressed =
+        this.input.isPressed(keyLower) || this.input.isPressed(keyUpper);
+
+      // Check if either case was previously pressed
+      const wasPressed =
+        this.prevKeyStates[keyLower] || this.prevKeyStates[keyUpper];
+
+      // Update both states
+      this.prevKeyStates[keyLower] = isPressed;
+      this.prevKeyStates[keyUpper] = isPressed;
+
+      return isPressed && !wasPressed;
+    };
+
+    const wasJustPressedWithCtrl = (key) => {
+      return wasJustPressed(key) && this.input.modifiers.ctrl;
+    };
+
+    // Ctrl+D: Toggle debug panel (always available)
+    if (wasJustPressedWithCtrl("d")) {
+      const wasHidden = !this.debug.isVisible;
+      this.debug.toggle();
+
+      if (wasHidden) {
+        // Showing panel - restore debug settings
+        this.render.options.wireframes = this.wireframes;
+      } else {
+        // Hiding panel - disable visual debug features but preserve settings
+        this.render.options.wireframes = false;
+        // Reset zoom to level config default
+        this.camera.setZoom(this.levelData.zoom || 1);
+        this.updateZoom();
+      }
+      return;
+    }
+
+    // Ctrl+I: Toggle editor mode (always available)
+    if (wasJustPressedWithCtrl("i")) {
+      window.dispatchEvent(new CustomEvent(GameEvents.TOGGLE_EDITOR));
+      return;
+    }
+
+    // All other shortcuts only work when debug panel is visible
+    if (!this.debug.isVisible) {
+      return;
+    }
+
+    // R: Reset world
+    if (wasJustPressed("r")) {
+      this.resetWorld();
+    }
+    // Ctrl+L: Toggle debug labels (check BEFORE plain L)
+    else if (wasJustPressedWithCtrl("l")) {
+      this.debugLabels = !this.debugLabels;
+      this.updateDebugStatus();
+    }
+    // L: Load level config (without Ctrl)
+    else if (wasJustPressed("l") && !this.input.modifiers.ctrl) {
+      document.getElementById("levelFileInput").click();
+    }
+    // G: Load game config
+    else if (wasJustPressed("g")) {
+      document.getElementById("gameConfigFileInput").click();
+    }
+    // P: Load player config
+    else if (wasJustPressed("p")) {
+      document.getElementById("playerConfigFileInput").click();
+    }
+    // Ctrl+Y: Toggle wireframes
+    else if (wasJustPressedWithCtrl("y")) {
+      this.wireframes = !this.wireframes;
+      this.render.options.wireframes = this.wireframes;
+      this.updateDebugStatus();
+    }
+    // 1: Damage player (test)
+    else if (wasJustPressed("1")) {
+      if (this.player && !this.player.isDestroyed) {
+        this.player.takeDamage(10);
+      }
+    }
+    // 2: Heal player (test)
+    else if (wasJustPressed("2")) {
+      if (this.player && !this.player.isDestroyed) {
+        this.player.heal(10);
+      }
+    }
+  }
+
   setupCustomRendering() {
     const canvas = this.render.canvas;
     const context = this.render.context;
@@ -494,17 +594,18 @@ export class Game {
     return {
       x: 0,
       y: -400,
-      width: 40,
-      height: 60,
+      shape: "rectangle",
+      width: 30,
+      height: 75,
       color: "#ffcc00",
       strokeColor: "#ff9900",
       strokeWidth: 3,
-      moveForce: 0.001,
-      jumpForce: 0.015,
+      moveForce: 0.03,
+      jumpForce: 1.2,
       maxSpeed: 8,
-      friction: 0.3,
+      friction: 0.01,
       frictionAir: 0.01,
-      density: 0.002,
+      density: 0.03,
       health: 100,
       maxHealth: 100,
       healthDisplay: "bar",
@@ -519,12 +620,6 @@ export class Game {
       zoom: 1,
       boundaries: {
         enabled: true,
-      },
-      overrides: {
-        player: {
-          x: 0,
-          y: -400,
-        },
       },
       entities: [
         {
@@ -801,73 +896,8 @@ export class Game {
       { passive: false }
     );
 
-    // Handle keyboard shortcuts
-    window.addEventListener("keydown", (e) => {
-      // Ctrl+D can always be used to toggle the panel
-      if ((e.key === "d" || e.key === "D") && e.ctrlKey) {
-        e.preventDefault(); // Prevent browser bookmark dialog
-        const wasHidden = !this.debug.isVisible;
-        this.debug.toggle();
-
-        if (wasHidden) {
-          // Showing panel - restore debug settings
-          this.render.options.wireframes = this.wireframes;
-        } else {
-          // Hiding panel - disable visual debug features but preserve settings
-          this.render.options.wireframes = false;
-          // Reset zoom to level config default
-          this.camera.setZoom(this.levelData.zoom || 1);
-          this.updateZoom();
-        }
-        return;
-      }
-
-      // Ctrl+I can always be used to toggle editor mode
-      if ((e.key === "i" || e.key === "I") && e.ctrlKey) {
-        e.preventDefault();
-        // Dispatch event for editor to listen to
-        window.dispatchEvent(new CustomEvent(GameEvents.TOGGLE_EDITOR));
-        return;
-      }
-
-      // Check if info panel is visible for all other shortcuts
-      if (!this.debug.isVisible) {
-        // If panel is hidden, ignore all other shortcuts
-        return;
-      }
-
-      // All other shortcuts only work when panel is visible
-      if (e.key === "r" || e.key === "R") {
-        this.resetWorld();
-      } else if ((e.key === "l" || e.key === "L") && !e.ctrlKey) {
-        document.getElementById("levelFileInput").click();
-      } else if ((e.key === "g" || e.key === "G") && !e.ctrlKey) {
-        document.getElementById("gameConfigFileInput").click();
-      } else if ((e.key === "p" || e.key === "P") && !e.ctrlKey) {
-        document.getElementById("playerConfigFileInput").click();
-      } else if ((e.key === "l" || e.key === "L") && e.ctrlKey) {
-        // Toggle debug labels with Ctrl+L
-        e.preventDefault();
-        this.debugLabels = !this.debugLabels;
-        this.updateDebugStatus();
-      } else if ((e.key === "y" || e.key === "Y") && e.ctrlKey) {
-        // Toggle wireframes with Ctrl+Y
-        e.preventDefault();
-        this.wireframes = !this.wireframes;
-        this.render.options.wireframes = this.wireframes;
-        this.updateDebugStatus();
-      } else if (e.key === "1") {
-        // Test: Damage player
-        if (this.player && !this.player.isDestroyed) {
-          this.player.takeDamage(10);
-        }
-      } else if (e.key === "2") {
-        // Test: Heal player
-        if (this.player && !this.player.isDestroyed) {
-          this.player.heal(10);
-        }
-      }
-    });
+    // Keyboard shortcuts are now handled via InputHandler in update loop
+    // See handleKeyboardShortcuts() method
 
     // Handle file input for loading custom levels
     const levelFileInput = document.getElementById("levelFileInput");
@@ -951,15 +981,17 @@ export class Game {
     // Use setTimeout to allow event handlers to respond
     setTimeout(() => {
       if (!resetEvent.detail.handled) {
-        // Standard reset
+        // Standard reset - reload the current level
         const { World } = Matter;
         World.clear(this.world);
         this.engine.world = this.world;
-        this.createWorld();
-        this.createPlayer();
+        this.createWorld(); // This calls gameEngine.createPlayer() internally
         this.camera.setTarget(this.player.body);
         this.camera.x = 0;
         this.camera.y = 0;
+
+        // Dispatch world reset event for editor to clear selection
+        window.dispatchEvent(new CustomEvent(GameEvents.WORLD_RESET));
       }
     }, 0);
   }
@@ -980,8 +1012,7 @@ export class Game {
     const { World } = Matter;
     World.clear(this.world);
     this.engine.world = this.world;
-    this.createWorld();
-    this.createPlayer();
+    this.createWorld(); // This calls gameEngine.createPlayer() internally
     this.camera.setTarget(this.player.body);
     this.camera.x = 0;
     this.camera.y = 0;
@@ -1011,6 +1042,9 @@ export class Game {
 
   gameLoop() {
     this.updateCamera();
+
+    // Handle keyboard shortcuts via InputHandler
+    this.handleKeyboardShortcuts();
 
     // Update engine (handles player, triggers, clouds)
     if (this.gameEngine) {

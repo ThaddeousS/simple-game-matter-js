@@ -9,10 +9,11 @@ export class TopToolBar extends ToolBar {
   createContent() {
     const html = `
                     <button class="editor-btn" id="editor-create-world-btn" style="${Styles.editorButton}">Create World</button>
-                    <button class="editor-btn" id="editor-revert-btn" style="${Styles.buttonWarning}">Reset</button>
+                    <button class="editor-btn" id="editor-revert-btn" style="${Styles.buttonWarning}">Reset State</button>
+                    <button class="editor-btn" id="editor-reload-level-btn" style="${Styles.buttonWarning}">Reload Level</button>
                     <button class="editor-btn" id="editor-save-btn" style="${Styles.editorButton}">Save</button>
-                    <button class="editor-btn" id="editor-load-btn" style="${Styles.editorButton}">Load</button>
-                    <button class="editor-btn" id="editor-exit-btn" style="background: #e74c3c; padding: 8px 20px; font-size: 14px; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Exit</button>
+                    <button class="editor-btn" id="editor-save-configs-btn" style="${Styles.editorButton}">Save Configs</button>
+                    <button class="editor-btn" id="editor-exit-btn" style="${Styles.editorExitButton}">Exit</button>
                 `;
     this.setContent(html);
   }

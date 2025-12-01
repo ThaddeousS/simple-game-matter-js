@@ -19,14 +19,14 @@ export class LeftToolBar extends ToolBar {
 
   createContent() {
     const html = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <div style="display: flex; gap: 5px;">
+                    <div style="${Styles.toolbarHeaderContainer}">
+                        <div style="${Styles.toolbarTabContainer}">
                             <button class="left-tab-btn" id="tools-tab-btn" style="${Styles.editorTabButtonActive}">Tools</button>
                             <button class="left-tab-btn" id="hierarchy-tab-btn" style="${Styles.editorTabButton}">Hierarchy</button>
                         </div>
                         <button id="left-expand-btn" style="${Styles.editorExpandButton}">▶</button>
                     </div>
-                    <div id="tools-tab-content" style="display: flex; flex-direction: column; gap: 8px;">
+                    <div id="tools-tab-content" style="${Styles.toolsTabContent}">
                         <button class="editor-tool-btn" id="tool-select" style="${Styles.editorToolButton}">Select</button>
                         <button class="editor-tool-btn" id="tool-entity" style="${Styles.editorToolButton}">Add Entity</button>
                         <button class="editor-tool-btn" id="tool-delete" style="${Styles.editorToolButton}">Delete</button>

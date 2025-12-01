@@ -1,4 +1,5 @@
 import { Dialog } from "./dialog.js";
+import { Styles } from "../styles/styles.js";
 
 export class CreateWorldDialog extends Dialog {
   constructor(onCreateWorld) {
@@ -11,81 +12,39 @@ export class CreateWorldDialog extends Dialog {
     // Create main dialog container
     this.dialog = document.createElement("div");
     this.dialog.id = "create-world-dialog";
-    this.dialog.style.cssText = `
-                    display: none;
-                    position: fixed;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    background: rgba(20, 20, 30, 0.98);
-                    border: 3px solid #3498db;
-                    border-radius: 10px;
-                    padding: 30px;
-                    z-index: 10000;
-                    min-width: 500px;
-                    max-width: 600px;
-                    box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
-                    max-height: 80vh;
-                    overflow-y: auto;
-                `;
+    this.dialog.style.cssText = Styles.createWorldDialog;
 
     // Create title
     const title = document.createElement("h2");
-    title.style.cssText = `
-                    color: #3498db;
-                    margin: 0 0 20px 0;
-                    font-size: 24px;
-                    text-align: center;
-                `;
+    title.style.cssText = Styles.createWorldDialogTitle;
     title.textContent = "Create World";
 
     // Create form container
     const form = document.createElement("div");
-    form.style.cssText = `
-                    display: flex;
-                    flex-direction: column;
-                    gap: 20px;
-                `;
+    form.style.cssText = Styles.createWorldDialogForm;
 
     // ========== SECTION 1: Manual World Creation ==========
     const manualSection = document.createElement("div");
-    manualSection.style.cssText = `
-                    border: 1px solid #555;
-                    border-radius: 8px;
-                    padding: 20px;
-                    background: rgba(255, 255, 255, 0.05);
-                `;
+    manualSection.style.cssText = Styles.createWorldDialogSection;
 
     const manualTitle = document.createElement("h3");
-    manualTitle.style.cssText =
-      "color: #3498db; margin: 0 0 15px 0; font-size: 16px;";
+    manualTitle.style.cssText = Styles.createWorldDialogSectionTitle;
     manualTitle.textContent = "Manual World Settings";
 
     // World Size input
     const worldSizeLabel = document.createElement("label");
-    worldSizeLabel.style.cssText =
-      "color: white; font-size: 14px; display: block; margin-bottom: 5px;";
+    worldSizeLabel.style.cssText = Styles.createWorldDialogLabel;
     worldSizeLabel.textContent = "World Size:";
 
     const worldSizeInput = document.createElement("input");
     worldSizeInput.type = "number";
     worldSizeInput.id = "manual-world-size";
     worldSizeInput.placeholder = "3000 (default)";
-    worldSizeInput.style.cssText = `
-                    padding: 8px;
-                    background: rgba(255, 255, 255, 0.1);
-                    border: 1px solid #555;
-                    border-radius: 4px;
-                    color: white;
-                    font-size: 14px;
-                    width: 100%;
-                    margin-bottom: 15px;
-                `;
+    worldSizeInput.style.cssText = Styles.createWorldDialogInput;
 
     // Gravity input
     const gravityLabel = document.createElement("label");
-    gravityLabel.style.cssText =
-      "color: white; font-size: 14px; display: block; margin-bottom: 5px;";
+    gravityLabel.style.cssText = Styles.createWorldDialogLabel;
     gravityLabel.textContent = "Gravity:";
 
     const gravityInput = document.createElement("input");
@@ -93,21 +52,12 @@ export class CreateWorldDialog extends Dialog {
     gravityInput.step = "0.1";
     gravityInput.id = "manual-gravity";
     gravityInput.placeholder = "1 (default)";
-    gravityInput.style.cssText = `
-                    padding: 8px;
-                    background: rgba(255, 255, 255, 0.1);
-                    border: 1px solid #555;
-                    border-radius: 4px;
-                    color: white;
-                    font-size: 14px;
-                    width: 100%;
-                    margin-bottom: 15px;
-                `;
+    gravityInput.style.cssText = Styles.createWorldDialogInput;
 
     // Boundaries checkbox
     const boundariesContainer = document.createElement("div");
     boundariesContainer.style.cssText =
-      "display: flex; align-items: center; gap: 10px; margin-bottom: 10px;";
+      Styles.createWorldDialogCheckboxContainer;
 
     const boundariesCheckbox = document.createElement("input");
     boundariesCheckbox.type = "checkbox";
@@ -116,8 +66,7 @@ export class CreateWorldDialog extends Dialog {
 
     const boundariesLabel = document.createElement("label");
     boundariesLabel.htmlFor = "manual-boundaries";
-    boundariesLabel.style.cssText =
-      "color: white; font-size: 14px; cursor: pointer;";
+    boundariesLabel.style.cssText = `${Styles.createWorldDialogLabel} cursor: pointer;`;
     boundariesLabel.textContent = "Create Boundaries (walls)";
 
     boundariesContainer.appendChild(boundariesCheckbox);
@@ -132,23 +81,17 @@ export class CreateWorldDialog extends Dialog {
 
     // ========== OR Divider ==========
     const divider = document.createElement("div");
-    divider.style.cssText = `
-                    display: flex;
-                    align-items: center;
-                    gap: 15px;
-                    margin: 10px 0;
-                `;
+    divider.style.cssText = Styles.createWorldDialogDivider;
 
     const line1 = document.createElement("div");
-    line1.style.cssText = "flex: 1; height: 1px; background: #555;";
+    line1.style.cssText = Styles.createWorldDialogDividerLine;
 
     const orText = document.createElement("span");
-    orText.style.cssText =
-      "color: #7f8c8d; font-size: 14px; font-weight: bold;";
+    orText.style.cssText = Styles.createWorldDialogDividerText;
     orText.textContent = "OR";
 
     const line2 = document.createElement("div");
-    line2.style.cssText = "flex: 1; height: 1px; background: #555;";
+    line2.style.cssText = Styles.createWorldDialogDividerLine;
 
     divider.appendChild(line1);
     divider.appendChild(orText);
@@ -156,58 +99,33 @@ export class CreateWorldDialog extends Dialog {
 
     // ========== SECTION 2: Load from Config ==========
     const configSection = document.createElement("div");
-    configSection.style.cssText = `
-                    border: 1px solid #555;
-                    border-radius: 8px;
-                    padding: 20px;
-                    background: rgba(255, 255, 255, 0.05);
-                `;
+    configSection.style.cssText = Styles.createWorldDialogSection;
 
     const configTitle = document.createElement("h3");
-    configTitle.style.cssText =
-      "color: #3498db; margin: 0 0 15px 0; font-size: 16px;";
+    configTitle.style.cssText = Styles.createWorldDialogSectionTitle;
     configTitle.textContent = "Load from Config Files";
 
     // Game Config Path input
     const gameConfigLabel = document.createElement("label");
-    gameConfigLabel.style.cssText =
-      "color: white; font-size: 14px; display: block; margin-bottom: 5px;";
+    gameConfigLabel.style.cssText = Styles.createWorldDialogLabel;
     gameConfigLabel.textContent = "Game Config Path:";
 
     const gameConfigInput = document.createElement("input");
     gameConfigInput.type = "text";
     gameConfigInput.id = "game-config-path";
     gameConfigInput.placeholder = "game-config.json (default)";
-    gameConfigInput.style.cssText = `
-                    padding: 8px;
-                    background: rgba(255, 255, 255, 0.1);
-                    border: 1px solid #555;
-                    border-radius: 4px;
-                    color: white;
-                    font-size: 14px;
-                    width: 100%;
-                    margin-bottom: 15px;
-                `;
+    gameConfigInput.style.cssText = Styles.createWorldDialogInput;
 
     // Level Config Path input
     const levelConfigLabel = document.createElement("label");
-    levelConfigLabel.style.cssText =
-      "color: white; font-size: 14px; display: block; margin-bottom: 5px;";
+    levelConfigLabel.style.cssText = Styles.createWorldDialogLabel;
     levelConfigLabel.textContent = "Level Config Path:";
 
     const levelConfigInput = document.createElement("input");
     levelConfigInput.type = "text";
     levelConfigInput.id = "level-config-path";
     levelConfigInput.placeholder = "level1.json (default)";
-    levelConfigInput.style.cssText = `
-                    padding: 8px;
-                    background: rgba(255, 255, 255, 0.1);
-                    border: 1px solid #555;
-                    border-radius: 4px;
-                    color: white;
-                    font-size: 14px;
-                    width: 100%;
-                `;
+    levelConfigInput.style.cssText = Styles.createWorldDialogInput;
 
     configSection.appendChild(configTitle);
     configSection.appendChild(gameConfigLabel);
@@ -217,26 +135,12 @@ export class CreateWorldDialog extends Dialog {
 
     // ========== Buttons ==========
     const buttonsContainer = document.createElement("div");
-    buttonsContainer.style.cssText = `
-                    display: flex;
-                    gap: 10px;
-                    margin-top: 20px;
-                    justify-content: center;
-                `;
+    buttonsContainer.style.cssText = Styles.createWorldDialogButtonsContainer;
 
     // Create button
     const createButton = document.createElement("button");
     createButton.textContent = "Create World";
-    createButton.style.cssText = `
-                    padding: 12px 30px;
-                    background: #3498db;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    font-size: 16px;
-                    font-weight: bold;
-                `;
+    createButton.style.cssText = Styles.createWorldDialogCreateButton;
     createButton.addEventListener("click", () => {
       // Gather manual settings
       const manualSettings = {
@@ -264,15 +168,7 @@ export class CreateWorldDialog extends Dialog {
     // Cancel button
     const cancelButton = document.createElement("button");
     cancelButton.textContent = "Cancel";
-    cancelButton.style.cssText = `
-                    padding: 12px 30px;
-                    background: #7f8c8d;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    font-size: 16px;
-                `;
+    cancelButton.style.cssText = Styles.createWorldDialogCancelButton;
     cancelButton.addEventListener("click", () => {
       this.close();
     });

@@ -4,8 +4,6 @@ import Matter from "matter-js";
 
 export class Entity {
   constructor(config, world) {
-    const { Bodies, World } = Matter;
-
     // Store reference to world for cleanup
     this.world = world;
 
@@ -92,21 +90,28 @@ export class Entity {
       );
     } else {
       // Default to rectangle
+      const bodyOptions = {
+        render: buildRenderOptions(),
+        friction: this.config.friction,
+        frictionAir: this.config.frictionAir,
+        restitution: this.config.restitution,
+        density: this.config.density,
+        isStatic: this.config.isStatic,
+        isSensor: isSensor,
+        label: this.config.label,
+      };
+
+      // Add chamfer if specified (for pill/capsule shapes)
+      if (this.config.chamfer !== undefined) {
+        bodyOptions.chamfer = this.config.chamfer;
+      }
+
       this.body = Bodies.rectangle(
         this.config.x,
         this.config.y,
         this.config.width,
         this.config.height,
-        {
-          render: buildRenderOptions(),
-          friction: this.config.friction,
-          frictionAir: this.config.frictionAir,
-          restitution: this.config.restitution,
-          density: this.config.density,
-          isStatic: this.config.isStatic,
-          isSensor: isSensor,
-          label: this.config.label,
-        }
+        bodyOptions
       );
     }
 

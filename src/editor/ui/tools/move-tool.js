@@ -5,9 +5,9 @@ export class MoveTool extends TransformTool {
   constructor(editor, entity) {
     super(editor, entity, "Move");
     this.dragMode = "free"; // 'free', 'x', 'y'
-    this.dragOffset = { x: 0, y: 0 };
     this.widgetSize = 60;
     this.arrowSize = 15;
+    this.initialMouseWorld = null;
   }
 
   onMouseDown(e, worldPos) {
@@ -18,9 +18,9 @@ export class MoveTool extends TransformTool {
     if (widgetInteraction) {
       this.dragMode = widgetInteraction;
       this.isDragging = true;
-      const center = this.getCenter();
-      this.dragOffset.x = center.x - worldPos.x;
-      this.dragOffset.y = center.y - worldPos.y;
+
+      // Store initial mouse position in world space
+      this.initialMouseWorld = { x: worldPos.x, y: worldPos.y };
 
       // Store initial positions for all entities
       this.initialPositions = this.entities.map((entity) => ({
@@ -35,20 +35,18 @@ export class MoveTool extends TransformTool {
     if (
       !this.isDragging ||
       this.entities.length === 0 ||
-      !this.initialPositions
+      !this.initialPositions ||
+      !this.initialMouseWorld
     )
       return;
 
     const { Body } = Matter;
-    const center = this.getCenter();
-    const targetX = worldPos.x + this.dragOffset.x;
-    const targetY = worldPos.y + this.dragOffset.y;
 
-    // Calculate delta from initial center
-    const deltaX = targetX - center.x;
-    const deltaY = targetY - center.y;
+    // Calculate how far the mouse has moved in world space
+    const deltaX = worldPos.x - this.initialMouseWorld.x;
+    const deltaY = worldPos.y - this.initialMouseWorld.y;
 
-    // Apply delta to all entities
+    // Apply delta to all entities based on their initial positions
     for (let i = 0; i < this.entities.length; i++) {
       const entity = this.entities[i];
       const initial = this.initialPositions[i];
@@ -63,12 +61,12 @@ export class MoveTool extends TransformTool {
         case "x":
           Body.setPosition(entity.body, {
             x: initial.x + deltaX,
-            y: entity.body.position.y,
+            y: initial.y,
           });
           break;
         case "y":
           Body.setPosition(entity.body, {
-            x: entity.body.position.x,
+            x: initial.x,
             y: initial.y + deltaY,
           });
           break;
@@ -83,6 +81,7 @@ export class MoveTool extends TransformTool {
         this.editor.updateWorkingState();
       }
       this.initialPositions = null;
+      this.initialMouseWorld = null;
     }
     this.isDragging = false;
     // Update properties panel after move
